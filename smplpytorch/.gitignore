@@ -1,0 +1,12 @@
+*.sw*
+*.bak
+*_bak.py
+
+.cache/
+.egg-info
+__pycache__/
+build/
+dist/
+
+image.png
+smplpytorch/native/models/*.pkl
