@@ -4,7 +4,7 @@
 
 
 ## Introduction
-This repository is the offical [Pytorch](https://pytorch.org/) implementation of [Pose2Mesh: Graph Convolutional Network for 3D Human Pose and Mesh Recovery from a 2D Human Pose (ECCV 2020)](). Below is the overall pipeline of Pose2Mesh.
+This repository is the offical [Pytorch](https://pytorch.org/) implementation of [Pose2Mesh: Graph Convolutional Network for 3D Human Pose and Mesh Recovery from a 2D Human Pose (ECCV 2020)](https://arxiv.org/abs/2008.09047). Below is the overall pipeline of Pose2Mesh.
 ![overall pipeline](./asset/pipeline.png)
 
 
@@ -35,7 +35,7 @@ For 3DPW benchmark, Pose2Mesh is trained on Human3.6M and COCO.
 | 3DPW | 63.10 mm | 35.37 mm |
 
 We provide qualitative results on SURREAL to show that Pose2Mesh can recover 3D shape to some degree.
-Please refer to the paper for more discussion.
+Please refer to the [paper](https://arxiv.org/abs/2008.09047) for more discussion.
 
 ![surreal quality results](./asset/surreal.png)
 ## Directory
