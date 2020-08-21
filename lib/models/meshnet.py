@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from core.config import config
+from core.config import cfg
 import graph_utils
 from models.backbones.cheby_graph_conv import graph_conv_cheby
 
@@ -18,7 +18,7 @@ class Pose2Mesh(nn.Module):
 
         # parameters
         # each block outputs same feature channels
-        if config.DATASET.target_joint_set == 'mano':
+        if cfg.DATASET.target_joint_set == 'mano':
             # each block outputs same feature channels
             self.CL_K = [3, 3, 3, 3, 3, 3, 3]  # kernel size between features
             self.CL_F = [(num_joint_input_chan, 32, 64, 64),

@@ -12,7 +12,7 @@ import Human36M.dataset, SURREAL.dataset, COCO.dataset, PW3D.dataset, AMASS.data
 import models
 from multiple_datasets import MultipleDatasets
 from core.loss import get_loss
-from core.config import config
+from core.config import cfg
 from display_utils import display_model
 from funcs_utils import get_optimizer, load_checkpoint, get_scheduler, count_parameters, stop, lr_check, save_obj
 from vis import vis_2d_pose, vis_3d_pose
@@ -20,7 +20,7 @@ from vis import vis_2d_pose, vis_3d_pose
 
 def get_dataloader(args, dataset_names, is_train):
     dataset_split = 'TRAIN' if is_train else 'TEST'
-    batch_per_dataset = config[dataset_split].batch_size // len(dataset_names)
+    batch_per_dataset = cfg[dataset_split].batch_size // len(dataset_names)
     dataset_list, dataloader_list = [], []
 
     print(f"==> Preparing {dataset_split} Dataloader...")
@@ -28,10 +28,10 @@ def get_dataloader(args, dataset_names, is_train):
         dataset = eval(f'{name}.dataset')(dataset_split.lower(), args=args)
         print("# of {} {} data: {}".format(dataset_split, name, len(dataset)))
         dataloader = DataLoader(dataset,
-                                  batch_size=batch_per_dataset,
-                                  shuffle=config[dataset_split].shuffle,
-                                  num_workers=config.DATASET.workers,
-                                  pin_memory=False)
+                                batch_size=batch_per_dataset,
+                                shuffle=cfg[dataset_split].shuffle,
+                                num_workers=cfg.DATASET.workers,
+                                pin_memory=False)
         dataset_list.append(dataset)
         dataloader_list.append(dataloader)
 
@@ -39,21 +39,24 @@ def get_dataloader(args, dataset_names, is_train):
         return dataset_list, dataloader_list
     else:
         trainset_loader = MultipleDatasets(dataset_list, make_same_len=True)
-        batch_generator = DataLoader(dataset=trainset_loader, batch_size=batch_per_dataset * len(dataset_names), shuffle=config[dataset_split].shuffle,
-                                  num_workers=config.DATASET.workers, pin_memory=False)
+        batch_generator = DataLoader(dataset=trainset_loader, batch_size=batch_per_dataset * len(dataset_names), shuffle=cfg[dataset_split].shuffle,
+                                     num_workers=cfg.DATASET.workers, pin_memory=False)
         return dataset_list, batch_generator
 
 
 def prepare_network(args, load_dir='', is_train=True):
-    dataset_names = config.DATASET.train_list if is_train else config.DATASET.test_list
+    dataset_names = cfg.DATASET.train_list if is_train else cfg.DATASET.test_list
     dataset_list, dataloader = get_dataloader(args, dataset_names, is_train)
     model, criterion, optimizer, lr_scheduler = None, None, None, None
     loss_history, test_error_history = [], {'surface': [], 'joint': []}
 
     main_dataset = dataset_list[0]
     if is_train or load_dir:
-        print(f"==> Preparing {config.MODEL.name} MODEL...")
-        model = eval(f'models.{config.MODEL.name}.get_model')(num_joint=main_dataset.joint_num, graph_L=main_dataset.graph_L)
+        print(f"==> Preparing {cfg.MODEL.name} MODEL...")
+        if cfg.MODEL.name == 'pose2mesh_net':
+            model = models.pose2mesh_net.get_model(num_joint=main_dataset.joint_num, graph_L=main_dataset.graph_L)
+        elif cfg.MODEL.name == 'posenet':
+            model = models.posenet.get_model(main_dataset.joint_num, hid_dim=4096, num_layer=2, p_dropout=0.5)
         print('# of model parameters: {}'.format(count_parameters(model)))
 
     if is_train:
@@ -63,7 +66,7 @@ def prepare_network(args, load_dir='', is_train=True):
 
     if load_dir and (not is_train or args.resume_training):
         print('==> Loading checkpoint')
-        checkpoint = load_checkpoint(load_dir=load_dir, pick_best=False)
+        checkpoint = load_checkpoint(load_dir=load_dir, pick_best=(cfg.MODEL.name == 'posenet'))
         model.load_state_dict(checkpoint['model_state_dict'])
 
         if is_train:
@@ -79,14 +82,14 @@ def prepare_network(args, load_dir='', is_train=True):
 
             lr_state = checkpoint['scheduler_state_dict']
             # update lr_scheduler
-            lr_state['milestones'], lr_state['gamma'] = Counter(config.TRAIN.lr_step), config.TRAIN.lr_factor
+            lr_state['milestones'], lr_state['gamma'] = Counter(cfg.TRAIN.lr_step), cfg.TRAIN.lr_factor
             lr_scheduler.load_state_dict(lr_state)
 
             loss_history = checkpoint['train_log']
             test_error_history = checkpoint['test_log']
-            config.TRAIN.begin_epoch = checkpoint['epoch'] + 1
+            cfg.TRAIN.begin_epoch = checkpoint['epoch'] + 1
             print('===> resume from epoch {:d}, current lr: {:.0e}, milestones: {}, lr factor: {:.0e}'
-                  .format(config.TRAIN.begin_epoch, curr_lr, lr_state['milestones'], lr_state['gamma']))
+                  .format(cfg.TRAIN.begin_epoch, curr_lr, lr_state['milestones'], lr_state['gamma']))
 
     return dataloader, dataset_list, model, criterion, optimizer, lr_scheduler, loss_history, test_error_history
 
@@ -97,17 +100,17 @@ class Trainer:
             = prepare_network(args, load_dir=load_dir, is_train=True)
 
         self.main_dataset = self.dataset_list[0]
-        self.print_freq = config.TRAIN.print_freq
+        self.print_freq = cfg.TRAIN.print_freq
 
-        self.J_regressor = eval(f'torch.Tensor(self.main_dataset.joint_regressor_{config.DATASET.target_joint_set}).cuda()')
+        self.J_regressor = eval(f'torch.Tensor(self.main_dataset.joint_regressor_{cfg.DATASET.target_joint_set}).cuda()')
 
         self.model = self.model.cuda()
         self.model = nn.DataParallel(self.model)
 
-        self.normal_weight = config.MODEL.normal_loss_weight
-        self.edge_weight = config.MODEL.edge_loss_weight
-        self.joint_weight = config.MODEL.joint_loss_weight
-        self.edge_add_epoch = config.TRAIN.edge_loss_start
+        self.normal_weight = cfg.MODEL.normal_loss_weight
+        self.edge_weight = cfg.MODEL.edge_loss_weight
+        self.joint_weight = cfg.MODEL.joint_loss_weight
+        self.edge_add_epoch = cfg.TRAIN.edge_loss_start
 
     def train(self, epoch):
         self.model.train()
@@ -167,9 +170,9 @@ class Tester:
             prepare_network(args, load_dir=load_dir, is_train=False)
 
         self.val_loader, self.val_dataset = self.val_loader[0], self.val_dataset[0]
-        self.print_freq = config.TRAIN.print_freq
+        self.print_freq = cfg.TRAIN.print_freq
 
-        self.J_regressor = eval(f'torch.Tensor(self.val_dataset.joint_regressor_{config.DATASET.target_joint_set}).cuda()')
+        self.J_regressor = eval(f'torch.Tensor(self.val_dataset.joint_regressor_{cfg.DATASET.target_joint_set}).cuda()')
 
         if self.model:
             self.model = self.model.cuda()
@@ -200,7 +203,7 @@ class Tester:
 
                 pred_pose = torch.matmul(self.J_regressor[None, :, :], pred_mesh)
 
-                j_error, s_error = self.val_dataset.evaluate_both(pred_mesh, gt_mesh, pred_pose, gt_pose3d)
+                j_error, s_error = self.val_dataset.compute_both_err(pred_mesh, gt_mesh, pred_pose, gt_pose3d)
 
                 # vis_3d_pose(pred_pose[0].detach().cpu().numpy(), self.val_dataset.skeleton, joint_set_name='smpl')
                 # vis_3d_pose(gt_pose3d[0].detach().cpu().numpy(), self.val_dataset.skeleton, joint_set_name='smpl')
@@ -211,7 +214,7 @@ class Tester:
                 surface_error += s_error
 
                 # Final Evaluation
-                if (epoch == 0 or epoch == config.TRAIN.end_epoch):
+                if (epoch == 0 or epoch == cfg.TRAIN.end_epoch):
                     pred_mesh, target_mesh = pred_mesh.detach().cpu().numpy(), gt_mesh.detach().cpu().numpy()
                     for j in range(len(input_pose)):
                         out = {}
@@ -223,8 +226,109 @@ class Tester:
             print(f'{eval_prefix} MPVPE: {self.surface_error:.2f}, MPJPE: {self.joint_error:.2f}')
 
             # Final Evaluation
-            if (epoch == 0 or epoch == config.TRAIN.end_epoch):
+            if (epoch == 0 or epoch == cfg.TRAIN.end_epoch):
                 self.val_dataset.evaluate(result)
 
+
+class LiftTrainer:
+    def __init__(self, args, load_dir):
+        self.batch_generator, self.dataset_list, self.model, self.loss, self.optimizer, self.lr_scheduler, self.loss_history, self.error_history \
+            = prepare_network(args, load_dir=load_dir, is_train=True)
+
+        self.loss = self.loss[0]
+        self.main_dataset = self.dataset_list[0]
+        self.num_joint = self.main_dataset.joint_num
+        self.print_freq = cfg.TRAIN.print_freq
+
+        self.model = self.model.cuda()
+        self.model = nn.DataParallel(self.model)
+
+    def train(self, epoch):
+        self.model.train()
+
+        lr_check(self.optimizer, epoch)
+
+        running_loss = 0.0
+        batch_generator = tqdm(self.batch_generator)
+        for i, (img_joint, cam_joint, joint_valid) in enumerate(batch_generator):
+            img_joint, cam_joint = img_joint.cuda().float(), cam_joint.cuda().float()
+            joint_valid = joint_valid.cuda().float()
+
+            img_joint = img_joint.view(len(img_joint), -1)  # batch x (num_joint*2)
+            pred_joint = self.model(img_joint)
+            pred_joint = pred_joint.view(-1, self.num_joint, 3)
+
+            loss = self.loss(pred_joint, cam_joint, joint_valid)
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            running_loss += float(loss.detach().item())
+
+            if i % self.print_freq == 0:
+                batch_generator.set_description(f'Epoch{epoch}_({i}/{len(self.batch_generator)}) => '
+                                                f'total loss: {loss.detach():.4f} ')
+
+        self.loss_history.append(running_loss / len(self.batch_generator))
+
+        print(f'Epoch{epoch} Loss: {self.loss_history[-1]:.4f}')
+
+
+class LiftTester:
+    def __init__(self, args, load_dir=''):
+        self.val_loader, self.val_dataset, self.model, _, _, _, _, _ = \
+            prepare_network(args, load_dir=load_dir, is_train=False)
+        self.val_dataset = self.val_dataset[0]
+        self.val_loader = self.val_loader[0]
+
+        self.num_joint = self.val_dataset.joint_num
+        self.print_freq = cfg.TRAIN.print_freq
+
+        if self.model:
+            self.model = self.model.cuda()
+            self.model = nn.DataParallel(self.model)
+
+        # initialize error value
+        self.surface_error = 9999.9
+        self.joint_error = 9999.9
+
+    def test(self, epoch, current_model=None):
+        if current_model:
+            self.model = current_model
+        self.model.eval()
+
+        result = []
+        joint_error = 0.0
+        eval_prefix = f'Epoch{epoch} ' if epoch else ''
+        loader = tqdm(self.val_loader)
+        with torch.no_grad():
+            for i, (img_joint, cam_joint, _) in enumerate(loader):
+                img_joint, cam_joint = img_joint.cuda().float(), cam_joint.cuda().float()
+
+                img_joint = img_joint.view(len(img_joint), -1)  # batch x (num_joint*2)
+                pred_joint = self.model(img_joint)
+                pred_joint = pred_joint.view(-1, self.num_joint, 3)
+
+                mpjpe = self.val_dataset.compute_joint_err(pred_joint, cam_joint)
+                joint_error += mpjpe
+
+                if i % self.print_freq == 0:
+                    loader.set_description(f'{eval_prefix}({i}/{len(self.val_loader)}) => joint error: {mpjpe:.4f}')
+
+                # Final Evaluation
+                if (epoch == 0 or epoch == cfg.TRAIN.end_epoch):
+                    pred_joint, target_joint = pred_joint.detach().cpu().numpy(), cam_joint.detach().cpu().numpy()
+                    for j in range(len(pred_joint)):
+                        out = {}
+                        out['joint_coord'], out['joint_coord_target'] = pred_joint[j], target_joint[j]
+                        result.append(out)
+
+        self.joint_error = joint_error / len(self.val_loader)
+        print(f'{eval_prefix} MPJPE: {self.joint_error:.4f}')
+
+        # Final Evaluation
+        if (epoch == 0 or epoch == cfg.TRAIN.end_epoch):
+            self.val_dataset.evaluate_joint(result)
 
 

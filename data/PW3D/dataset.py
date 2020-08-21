@@ -12,16 +12,12 @@ import scipy.sparse
 from pycocotools.coco import COCO
 from tqdm import tqdm
 
-from coarsening import coarsen, laplacian, perm_index_reverse, lmax_L, rescale_L
-from core.config import config as cfg
-from display_utils import display_model
-
+from core.config import cfg
 from funcs_utils import stop, save_obj
-from graph_utils import build_graph, build_coarse_graphs
+from graph_utils import build_coarse_graphs
 from smpl import SMPL
-from coord_utils import world2cam, cam2pixel, process_bbox, get_center_scale, rigid_align, get_bbox
-from smplpytorch.pytorch.smpl_layer import SMPL_Layer
-from aug_utils import get_affine_transform, affine_transform, augm_params, j2d_processing, j3d_processing, rotate_2d, my3d_processing
+from coord_utils import cam2pixel, process_bbox, rigid_align, get_bbox
+from aug_utils import j2d_processing, j3d_processing
 from vis import vis_2d_pose, vis_3d_pose
 
 
@@ -90,38 +86,6 @@ class PW3D(torch.utils.data.Dataset):
         flip_pairs = eval(f'self.{joint_category}_flip_pairs')
 
         return joint_num, skeleton, flip_pairs
-
-    def build_adj(self):
-        adj_matrix = np.zeros((self.joint_num, self.joint_num))
-        for line in self.skeleton:
-            adj_matrix[line] = 1
-            adj_matrix[line[1], line[0]] = 1
-        for lr in self.flip_pairs:
-            adj_matrix[lr] = 1
-            adj_matrix[lr[1], lr[0]] = 1
-
-        return adj_matrix + np.eye(self.joint_num)
-
-    def compute_graph(self, levels=9):
-        joint_adj = self.build_adj()
-        # Build graph
-        mesh_adj = build_graph(self.mesh_model.face, self.mesh_model.face.max() + 1)
-        graph_Adj, graph_L, graph_perm = coarsen(mesh_adj, levels=levels)
-
-        input_Adj = scipy.sparse.csr_matrix(joint_adj)
-        input_Adj.eliminate_zeros()
-        input_L = laplacian(input_Adj, normalized=True)
-
-        graph_L[-1] = input_L
-        graph_Adj[-1] = input_Adj
-
-        # Compute max eigenvalue of graph Laplacians, rescale Laplacian
-        graph_lmax = []
-        for i in range(levels):
-            graph_lmax.append(lmax_L(graph_L[i]))
-            graph_L[i] = rescale_L(graph_L[i], graph_lmax[i])
-
-        return graph_Adj, graph_L, graph_perm, perm_index_reverse(graph_perm[0])
 
     def get_smpl_coord(self, smpl_param):
         pose, shape, trans, gender = smpl_param['pose'], smpl_param['shape'], smpl_param['trans'], smpl_param['gender']
@@ -255,20 +219,31 @@ class PW3D(torch.utils.data.Dataset):
         mean, std = np.mean(joint_img_coco, axis=0), np.std(joint_img_coco, axis=0)
         joint_img_coco = (joint_img_coco.copy() - mean) / std
 
-        inputs = {'pose2d': joint_img_coco}
-        targets = {'mesh': mesh_cam / 1000, 'reg_pose3d': joint_cam_h36m}
-        meta = {'dummy': np.ones(1, dtype=np.float32)}
+        if cfg.MODEL.name == 'pose2mesh_net':
+            inputs = {'pose2d': joint_img_coco}
+            targets = {'mesh': mesh_cam / 1000, 'reg_pose3d': joint_cam_h36m}
+            meta = {'dummy': np.ones(1, dtype=np.float32)}
 
-        return inputs, targets, meta
+            return inputs, targets, meta
 
-        return joint_img_coco, joint_cam_coco, mesh_cam / 1000, joint_img_coco, joint_img_coco, joint_cam_h36m
+        elif cfg.MODEL.name == 'posenet':
+            joint_valid = np.ones((len(joint_cam_coco), 1), dtype=np.float32)  # dummy
+            return joint_img_coco, joint_cam_coco, joint_valid
 
-    def evaluate_both(self, pred_mesh, target_mesh, pred_joint, target_joint):
+    def compute_joint_err(self, pred_joint, target_joint):
         # root align joint
-        pred_mesh = pred_mesh - pred_joint[:, :1, :]
-        target_mesh = target_mesh - target_joint[:, :1, :]
-        pred_joint = pred_joint - pred_joint[:, :1, :]
-        target_joint = target_joint - target_joint[:, :1, :]
+        pred_joint, target_joint = pred_joint - pred_joint[:, -2:-1, :], target_joint - target_joint[:, -2:-1, :]
+
+        pred_joint, target_joint = pred_joint.detach().cpu().numpy(), target_joint.detach().cpu().numpy()
+
+        joint_mean_error = np.power((np.power((pred_joint - target_joint), 2)).sum(axis=2), 0.5).mean()
+
+        return joint_mean_error
+
+    def compute_both_err(self, pred_mesh, target_mesh, pred_joint, target_joint):
+        # root align joint
+        pred_mesh, target_mesh = pred_mesh - pred_joint[:, :1, :], target_mesh - target_joint[:,:1, :]
+        pred_joint, target_joint = pred_joint - pred_joint[:, :1, :], target_joint - target_joint[:, :1, :]
 
         pred_mesh, target_mesh = pred_mesh.detach().cpu().numpy(), target_mesh.detach().cpu().numpy()
         pred_joint, target_joint = pred_joint.detach().cpu().numpy(), target_joint.detach().cpu().numpy()
@@ -328,7 +303,7 @@ class PW3D(torch.utils.data.Dataset):
             pampjpe_h36m[n] = np.sqrt(np.sum((pose_coord_out_h36m - pose_coord_gt_h36m)**2,1))
 
             vis = cfg.TEST.vis
-            if vis:
+            if vis and (n % 500):
                 mesh_to_save = mesh_coord_out / 1000
                 obj_path = osp.join(cfg.vis_dir, f'3dpw_{n}.obj')
                 save_obj(mesh_to_save, self.mesh_model.face, obj_path)

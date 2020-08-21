@@ -4,7 +4,7 @@ import torch
 import random
 
 from coord_utils import get_center_scale
-from core.config import config
+from core.config import cfg
 
 
 def transform_joint_to_other_db(src_joint, src_name, dst_name):
@@ -103,10 +103,10 @@ def augm_params(is_train):
     flip = 0  # flipping
     rot = 0  # rotation
     # We flip with probability 1/2
-    if config.AUG.flip and random.uniform(0, 1) <= 0.5:
+    if cfg.AUG.flip and random.uniform(0, 1) <= 0.5:
         flip = 1
 
-    rot_factor = config.AUG.rotate_factor
+    rot_factor = cfg.AUG.rotate_factor
     # The rotation is a number in the area [-2*rotFactor, 2*rotFactor]
     rot = min(2 * rot_factor,
               max(-2 * rot_factor, np.random.randn() * rot_factor))

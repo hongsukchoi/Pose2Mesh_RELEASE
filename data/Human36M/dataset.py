@@ -9,14 +9,13 @@ import scipy.sparse
 import cv2
 from pycocotools.coco import COCO
 
-from core.config import config as cfg
-from coarsening import coarsen, laplacian, perm_index_reverse, lmax_L, rescale_L
-from graph_utils import build_graph, build_coarse_graphs
+from core.config import cfg 
+from graph_utils import build_coarse_graphs
 from noise_utils import synthesize_pose
 
 from smpl import SMPL
 from coord_utils import world2cam, cam2pixel, process_bbox, rigid_align, get_bbox
-from aug_utils import affine_transform, j2d_processing
+from aug_utils import affine_transform, j2d_processing, augm_params, j3d_processing
 from Human36M.noise_stats import error_distribution
 
 from funcs_utils import save_obj, stop
@@ -106,38 +105,6 @@ class Human36M(torch.utils.data.Dataset):
 
         return joint_num, skeleton, flip_pairs
 
-    def build_adj(self):
-        adj_matrix = np.zeros((self.joint_num, self.joint_num))
-        for line in self.skeleton:
-            adj_matrix[line] = 1
-            adj_matrix[line[1], line[0]] = 1
-        for lr in self.flip_pairs:
-            adj_matrix[lr] = 1
-            adj_matrix[lr[1], lr[0]] = 1
-
-        return adj_matrix + np.eye(self.joint_num)
-
-    def compute_graph(self, levels=9):
-        joint_adj = self.build_adj()
-        # Build graph
-        mesh_adj = build_graph(self.mesh_model.face, self.mesh_model.face.max() + 1)
-        graph_Adj, graph_L, graph_perm = coarsen(mesh_adj, levels=levels)
-        input_Adj = scipy.sparse.csr_matrix(joint_adj)
-        input_Adj.eliminate_zeros()
-        input_L = laplacian(input_Adj, normalized=True)
-
-        graph_L[-1] = input_L
-        graph_Adj[-1] = input_Adj
-
-        # Compute max eigenvalue of graph Laplacians, rescale Laplacian
-        graph_lmax = []
-        renewed_lmax = []
-        for i in range(levels):
-            graph_lmax.append(lmax_L(graph_L[i]))
-            graph_L[i] = rescale_L(graph_L[i], graph_lmax[i])
-
-        return graph_Adj, graph_L, graph_perm, perm_index_reverse(graph_perm[0])
-
     def get_subsampling_ratio(self):
         if self.data_split == 'train':
             return 5  # 50
@@ -215,7 +182,6 @@ class Human36M(torch.utils.data.Dataset):
                 joints[str(subject)] = json.load(f)
             # smpl parameter load
             with open(osp.join(self.annot_path, 'Human36M_subject' + str(subject) + '_smpl_param.json'), 'r') as f:
-            # with open(osp.join(self.annot_path, 'SMPL_sampled_x50', 'Human36M_subject' + str(subject) + '_smpl_param.json'), 'r') as f:
                 smpl_params[str(subject)] = json.load(f)
         db.createIndex()
 
@@ -372,7 +338,7 @@ class Human36M(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         data = copy.deepcopy(self.datalist[idx])
         img_id, bbox, smpl_param, cam_param, img_shape = data['img_id'], data['bbox'].copy(), data['smpl_param'].copy(), data['cam_param'].copy(), data['img_hw']
-        flip, rot = 0, 0
+        flip, rot = augm_params(is_train=(self.data_split == 'train'))
 
         # smpl coordinates
         mesh_cam, joint_cam_smpl = self.get_smpl_coord(smpl_param, cam_param)
@@ -394,25 +360,14 @@ class Human36M(torch.utils.data.Dataset):
         elif self.input_joint_name == 'human36':
             joint_img, joint_cam = joint_img_h36m, joint_cam_h36m
 
-        # default valid
-        mesh_valid = np.ones((len(mesh_cam), 1), dtype=np.float32)
-        reg_joint_valid = np.ones((len(joint_cam_h36m), 1), dtype=np.float32)
-        lift_joint_valid = np.ones((len(joint_cam), 1), dtype=np.float32)
-        # if fitted mesh is too far from h36m gt, discard it
-        error = self.get_fitting_error(joint_cam_h36m, mesh_cam)
-        if error > self.fitting_thr:
-            mesh_valid[:] = 0
-            if self.input_joint_name == 'coco':
-                lift_joint_valid[:] = 0
-
         # make new bbox
         bbox = get_bbox(joint_img)
         bbox = process_bbox(bbox.copy())
 
         # aug
         joint_img, trans = j2d_processing(joint_img.copy(), (cfg.MODEL.input_shape[1], cfg.MODEL.input_shape[0]),
-                                          bbox, rot, flip, None)
-        # no aug/transform for cam joints
+                                          bbox, rot, flip, self.flip_pairs)
+        joint_cam = j3d_processing(joint_cam, rot, flip, self.flip_pairs)
 
         if not cfg.DATASET.use_gt_input:
             joint_img = self.replace_joint_img(idx, img_id, joint_img, bbox, trans)
@@ -431,11 +386,33 @@ class Human36M(torch.utils.data.Dataset):
         mean, std = np.mean(joint_img, axis=0), np.std(joint_img, axis=0)
         joint_img = (joint_img.copy() - mean) / std
 
-        inputs = {'pose2d': joint_img}
-        targets = {'mesh': mesh_cam / 1000, 'lift_pose3d': joint_cam, 'reg_pose3d': joint_cam_h36m}
-        meta = {'mesh_valid': mesh_valid, 'lift_pose3d_valid': lift_joint_valid, 'reg_pose3d_valid': reg_joint_valid}
+        if cfg.MODEL.name == 'pose2mesh_net':
+            # default valid
+            mesh_valid = np.ones((len(mesh_cam), 1), dtype=np.float32)
+            reg_joint_valid = np.ones((len(joint_cam_h36m), 1), dtype=np.float32)
+            lift_joint_valid = np.ones((len(joint_cam), 1), dtype=np.float32)
+            # if fitted mesh is too far from h36m gt, discard it
+            error = self.get_fitting_error(joint_cam_h36m, mesh_cam)
+            if error > self.fitting_thr:
+                mesh_valid[:] = 0
+                if self.input_joint_name == 'coco':
+                    lift_joint_valid[:] = 0
 
-        return inputs, targets, meta
+            inputs = {'pose2d': joint_img}
+            targets = {'mesh': mesh_cam / 1000, 'lift_pose3d': joint_cam, 'reg_pose3d': joint_cam_h36m}
+            meta = {'mesh_valid': mesh_valid, 'lift_pose3d_valid': lift_joint_valid, 'reg_pose3d_valid': reg_joint_valid}
+
+            return inputs, targets, meta
+
+        elif cfg.MODEL.name == 'posenet':
+            # default valid
+            joint_valid = np.ones((len(joint_cam), 1), dtype=np.float32)
+            # if fitted mesh is too far from h36m gt, discard it
+            error = self.get_fitting_error(joint_cam_h36m, mesh_cam)
+            if (error > self.fitting_thr) and (self.input_joint_name == 'coco'):
+                joint_valid[:] = 0
+
+            return joint_img, joint_cam, joint_valid
 
     def replace_joint_img(self, idx, img_id, joint_img, bbox, trans):
         if self.input_joint_name == 'coco':
@@ -471,7 +448,18 @@ class Human36M(torch.utils.data.Dataset):
                     joint_img_h36m[i, :2] = affine_transform(joint_img_h36m[i, :2].copy(), trans)
                 return joint_img_h36m
 
-    def evaluate_both(self, pred_mesh, target_mesh, pred_joint, target_joint):
+    def compute_joint_err(self, pred_joint, target_joint):
+        # root align joint
+        pred_joint, target_joint = pred_joint - pred_joint[:, :1, :], target_joint - target_joint[:, :1, :]
+
+        pred_joint, target_joint = pred_joint.detach().cpu().numpy(), target_joint.detach().cpu().numpy()
+
+        pred_joint, target_joint = pred_joint[:, self.human36_eval_joint, :], target_joint[:, self.human36_eval_joint, :]
+        joint_mean_error = np.power((np.power((pred_joint - target_joint), 2)).sum(axis=2), 0.5).mean()
+
+        return joint_mean_error
+
+    def compute_both_err(self, pred_mesh, target_mesh, pred_joint, target_joint):
         # root align joint
         pred_mesh, target_mesh = pred_mesh - pred_joint[:, :1, :], target_mesh - target_joint[:, :1, :]
         pred_joint, target_joint = pred_joint - pred_joint[:, :1, :], target_joint - target_joint[:, :1, :]
@@ -485,10 +473,45 @@ class Human36M(torch.utils.data.Dataset):
 
         return joint_mean_error, mesh_mean_error
 
+    def evaluate_joint(self, outs):
+        print('Evaluation start...')
+        annots = self.datalist
+        assert len(annots) == len(outs)
+        sample_num = len(annots)
+
+        mpjpe = np.zeros((sample_num, len(self.human36_eval_joint)))
+        pampjpe = np.zeros((sample_num, len(self.human36_eval_joint)))
+        for n in range(sample_num):
+            out = outs[n]
+            annot = annots[n]
+
+            # render materials
+            pose_coord_out, pose_coord_gt = out['joint_coord'], annot['joint_cam']
+
+            # root joint alignment
+            pose_coord_out, pose_coord_gt = pose_coord_out - pose_coord_out[:1], pose_coord_gt - pose_coord_gt[:1]
+            # sample eval joitns
+            pose_coord_out, pose_coord_gt = pose_coord_out[self.human36_eval_joint, :], pose_coord_gt[self.human36_eval_joint, :]
+
+            # pose error calculate
+            mpjpe[n] = np.sqrt(np.sum((pose_coord_out - pose_coord_gt) ** 2, 1))
+            # perform rigid alignment
+            pose_coord_out = rigid_align(pose_coord_out, pose_coord_gt)
+            pampjpe[n] = np.sqrt(np.sum((pose_coord_out - pose_coord_gt) ** 2, 1))
+
+        # total pose error
+        tot_err = np.mean(mpjpe)
+        eval_summary = 'MPJPE (mm)    >> tot: %.2f\n' % (tot_err)
+        print(eval_summary)
+
+        tot_err = np.mean(pampjpe)
+        eval_summary = 'PA-MPJPE (mm) >> tot: %.2f\n' % (tot_err)
+        print(eval_summary)
+
     def evaluate(self, outs):
         print('Evaluation start...')
         annots = self.datalist
-        # assert len(annots) == len(outs)
+        assert len(annots) == len(outs)
         sample_num = len(outs)
 
         # eval H36M joints
@@ -502,7 +525,6 @@ class Human36M(torch.utils.data.Dataset):
         pose_error_action = [[] for _ in range(len(self.action_name))]  # pose error for each sequence
         mesh_error = np.zeros((sample_num, self.smpl_vertex_num))  # mesh error
         mesh_error_action = [[] for _ in range(len(self.action_name))]  # mesh error for each sequence
-
         for n in range(sample_num):
             annot = annots[n]
             out = outs[n]
@@ -547,7 +569,7 @@ class Human36M(torch.utils.data.Dataset):
             pose_pa_error_action_h36m[action_idx].append(pose_pa_error_h36m[n].copy())
 
             vis = cfg.TEST.vis
-            if vis and (n % 10 == 0):
+            if vis and (n % 500 == 0):
                 mesh_to_save = mesh_coord_out / 1000
                 obj_path = osp.join(cfg.vis_dir, f'{obj_name}.obj')
                 save_obj(mesh_to_save, self.mesh_model.face, obj_path)

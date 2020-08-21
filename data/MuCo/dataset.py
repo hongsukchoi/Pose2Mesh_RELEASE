@@ -10,12 +10,12 @@ import copy
 from pycocotools.coco import COCO
 
 from Human36M.noise_stats import error_distribution
-from core.config import config as cfg
+from core.config import cfg 
 from funcs_utils import stop
 from noise_utils import synthesize_pose
 from smpl import SMPL
 from coord_utils import cam2pixel, process_bbox, get_bbox
-from aug_utils import augm_params, j2d_processing, affine_transform, transform_joint_to_other_db
+from aug_utils import augm_params, j2d_processing, affine_transform, transform_joint_to_other_db, j3d_processing
 from vis import vis_3d_pose, vis_2d_pose
 
 
@@ -268,7 +268,7 @@ class MuCo(torch.utils.data.Dataset):
         data = copy.deepcopy(self.datalist[idx])
         img_path, img_shape, bbox, smpl_param, cam_param = data['img_path'], data['img_shape'], data['bbox'], data[
             'smpl_param'], data['cam_param']
-        flip, rot = 0, 0
+        flip, rot = augm_params(is_train=(self.data_split == 'train'))
 
         # regress h36m, coco joints
         mesh_cam, joint_cam_smpl = self.get_smpl_coord(smpl_param)
@@ -288,23 +288,14 @@ class MuCo(torch.utils.data.Dataset):
         elif self.input_joint_name == 'human36':
             joint_img, joint_cam = joint_img_h36m, joint_cam_h36m
 
-        # default valid
-        mesh_valid = np.ones((len(mesh_cam), 1), dtype=np.float32)
-        reg_joint_valid = np.ones((len(joint_cam_h36m), 1), dtype=np.float32)
-        lift_joint_valid = np.ones((len(joint_cam), 1), dtype=np.float32)
-        # if fitted mesh is too far from h36m gt, discard it
-        error = self.get_fitting_error(joint_cam_h36m, mesh_cam)
-        if error > self.fitting_thr:
-            mesh_valid[:], reg_joint_valid[:], lift_joint_valid[:] = 0, 0, 0
-
         # make new bbox
         init_bbox = get_bbox(joint_img)
         bbox = process_bbox(init_bbox.copy())
 
         # aug
         joint_img, trans = j2d_processing(joint_img.copy(), (cfg.MODEL.input_shape[1], cfg.MODEL.input_shape[0]),
-                                          bbox, rot, flip, None)
-        # no aug/transform for cam joints
+                                          bbox, rot, flip, self.flip_pairs)
+        joint_cam = j3d_processing(joint_cam, rot, flip, self.flip_pairs)
 
         if not cfg.DATASET.use_gt_input:
             joint_img = self.replace_joint_img(joint_img, bbox, trans)
@@ -317,11 +308,26 @@ class MuCo(torch.utils.data.Dataset):
         mean, std = np.mean(joint_img, axis=0), np.std(joint_img, axis=0)
         joint_img = (joint_img.copy() - mean) / std
 
-        inputs = {'pose2d': joint_img}
-        targets = {'mesh': mesh_cam / 1000, 'lift_pose3d': joint_cam, 'reg_pose3d': joint_cam_h36m}
-        meta = {'mesh_valid': mesh_valid, 'lift_pose3d_valid': lift_joint_valid, 'reg_pose3d_valid': reg_joint_valid}
+        if cfg.MODEL.name == 'pose2mesh_net':
+            # default valid
+            mesh_valid = np.ones((len(mesh_cam), 1), dtype=np.float32)
+            reg_joint_valid = np.ones((len(joint_cam_h36m), 1), dtype=np.float32)
+            lift_joint_valid = np.ones((len(joint_cam), 1), dtype=np.float32)
+            # if fitted mesh is too far from h36m gt, discard it
+            error = self.get_fitting_error(joint_cam_h36m, mesh_cam)
+            if error > self.fitting_thr:
+                mesh_valid[:], reg_joint_valid[:], lift_joint_valid[:] = 0, 0, 0
 
-        return inputs, targets, meta
+            inputs = {'pose2d': joint_img}
+            targets = {'mesh': mesh_cam / 1000, 'lift_pose3d': joint_cam, 'reg_pose3d': joint_cam_h36m}
+            meta = {'mesh_valid': mesh_valid, 'lift_pose3d_valid': lift_joint_valid, 'reg_pose3d_valid': reg_joint_valid}
+
+            return inputs, targets, meta
+
+        elif cfg.MODEL.name == 'posenet':
+            # default valid
+            joint_valid = np.ones((len(joint_cam), 1), dtype=np.float32)
+            return joint_img, joint_cam, joint_valid
 
     def replace_joint_img(self, joint_img, bbox, trans):
         if self.input_joint_name == 'coco':

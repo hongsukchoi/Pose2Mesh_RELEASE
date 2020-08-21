@@ -1,0 +1,32 @@
+DATASET:
+    train_list: ['SURREAL']
+    test_list: ['SURREAL']
+    input_joint_set: 'smpl'
+    target_joint_set: 'smpl'
+    workers: 16
+    use_gt_input: False
+
+MODEL:
+    name: 'posenet'
+    input_shape: [384, 288]
+
+TRAIN:
+    print_freq: 10
+    batch_size: 64
+    shuffle: True
+    begin_epoch: 1
+    end_epoch: 60
+    scheduler: 'step'
+    lr: 0.001
+    lr_step: [30]
+    lr_factor: 0.5
+    optimizer: 'rmsprop'
+
+AUG:
+    flip: True
+    rotate_factor: 0
+
+TEST:
+    batch_size: 64
+    shuffle: False
+    weight_path: './experiment/posenet_smplJ_train_surreal'

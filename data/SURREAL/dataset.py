@@ -12,13 +12,12 @@ import scipy.sparse
 from pycocotools.coco import COCO
 
 from funcs_utils import stop, save_obj
-from graph_utils import build_graph, build_coarse_graphs
+from graph_utils import build_coarse_graphs
 
-from core.config import config as cfg
+from core.config import cfg 
 from smpl import SMPL
-from coord_utils import cam2pixel, process_bbox, get_bbox
-from coarsening import coarsen, laplacian, perm_index_reverse, lmax_L, rescale_L
-from aug_utils import augm_params, j2d_processing
+from coord_utils import cam2pixel, process_bbox, get_bbox, rigid_align
+from aug_utils import augm_params, j2d_processing, j3d_processing
 
 from vis import vis_2d_pose, vis_3d_pose
 
@@ -59,43 +58,6 @@ class SURREAL(torch.utils.data.Dataset):
         flip_pairs = eval(f'self.{joint_category}_flip_pairs')
 
         return joint_num, skeleton, flip_pairs
-
-    def build_adj(self):
-        joint_num = self.smpl_joint_num
-        skeleton = self.smpl_skeleton
-        flip_pairs = self.smpl_flip_pairs
-
-        adj_matrix = np.zeros((joint_num, joint_num))
-        for line in skeleton:
-            adj_matrix[line] = 1
-            adj_matrix[line[1], line[0]] = 1
-        for lr in flip_pairs:
-            adj_matrix[lr] = 1
-            adj_matrix[lr[1], lr[0]] = 1
-
-        return adj_matrix + np.eye(joint_num)
-
-    def compute_graph(self, levels=9):
-        joint_adj = self.build_adj()
-        # Build graph
-        mesh_adj = build_graph(self.mesh_model.face, self.mesh_model.face.max() + 1)
-        graph_Adj, graph_L, graph_perm = coarsen(mesh_adj, levels=levels)
-
-        input_Adj = scipy.sparse.csr_matrix(joint_adj)
-        input_Adj.eliminate_zeros()
-        input_L = laplacian(input_Adj, normalized=True)
-
-        graph_L[-1] = input_L
-        graph_Adj[-1] = input_Adj
-
-        # Compute max eigenvalue of graph Laplacians, rescale Laplacian
-        graph_lmax = []
-        renewed_lmax = []
-        for i in range(levels):
-            graph_lmax.append(lmax_L(graph_L[i]))
-            graph_L[i] = rescale_L(graph_L[i], graph_lmax[i])
-
-        return graph_Adj, graph_L, graph_perm, perm_index_reverse(graph_perm[0])
 
     def get_smpl_coord(self, smpl_param):
         pose, shape, trans, gender = smpl_param['pose'], smpl_param['shape'], smpl_param['trans'], smpl_param['gender']
@@ -182,8 +144,7 @@ class SURREAL(torch.utils.data.Dataset):
         data = copy.deepcopy(self.datalist[idx])
         img_id, img_name, cam_param, bbox, smpl_param, img_shape =data['img_id'], data['img_name'], data['cam_param'], data['bbox'], data[
             'smpl_param'], data['img_shape']
-        img_path = osp.join(self.img_path, img_name)
-        rot, flip = 0, 0
+        flip, rot = augm_params(is_train=(self.data_split == 'train'))
 
         # smpl coordinates
         smpl_mesh_coord_cam, smpl_joint_coord_cam = self.get_smpl_coord(smpl_param)
@@ -197,11 +158,6 @@ class SURREAL(torch.utils.data.Dataset):
         smpl_coord_cam = smpl_coord_cam - smpl_coord_cam[self.smpl_vertex_num + self.smpl_root_joint_idx]
         mesh_coord_cam = smpl_coord_cam[:self.smpl_vertex_num];
         joint_coord_cam = smpl_coord_cam[self.smpl_vertex_num:];
-
-        # default valid
-        mesh_valid = np.ones((len(mesh_coord_cam), 1), dtype=np.float32)
-        reg_joint_valid = np.ones((len(joint_coord_cam), 1), dtype=np.float32)
-        lift_joint_valid = np.ones((len(joint_coord_cam), 1), dtype=np.float32)
 
         if not cfg.DATASET.use_gt_input:
             # train / test with 2d dection input
@@ -218,8 +174,8 @@ class SURREAL(torch.utils.data.Dataset):
 
         # aug
         joint_coord_img, trans = j2d_processing(joint_coord_img.copy(), (cfg.MODEL.input_shape[1], cfg.MODEL.input_shape[0]),
-                                          bbox, rot, flip, None)
-        # no aug/transform for cam joints
+                                          bbox, rot, flip, self.flip_pairs)
+        joint_coord_cam = j3d_processing(joint_coord_cam, rot, flip, self.flip_pairs)
 
         #  -> 0~1
         joint_coord_img = joint_coord_img[:, :2]
@@ -229,13 +185,34 @@ class SURREAL(torch.utils.data.Dataset):
         mean, std = np.mean(joint_coord_img, axis=0), np.std(joint_coord_img, axis=0)
         joint_coord_img = (joint_coord_img.copy() - mean) / std
 
-        inputs = {'pose2d': joint_coord_img}
-        targets = {'mesh': mesh_coord_cam / 1000, 'lift_pose3d': joint_coord_cam, 'reg_pose3d': joint_coord_cam}
-        meta = {'mesh_valid': mesh_valid, 'lift_pose3d_valid': lift_joint_valid, 'reg_pose3d_valid': reg_joint_valid}
+        if cfg.MODEL.name == 'pose2mesh_net':
+            # default valid
+            mesh_valid = np.ones((len(mesh_coord_cam), 1), dtype=np.float32)
+            reg_joint_valid = np.ones((len(joint_coord_cam), 1), dtype=np.float32)
+            lift_joint_valid = np.ones((len(joint_coord_cam), 1), dtype=np.float32)
+
+            inputs = {'pose2d': joint_coord_img}
+            targets = {'mesh': mesh_coord_cam / 1000, 'lift_pose3d': joint_coord_cam, 'reg_pose3d': joint_coord_cam}
+            meta = {'mesh_valid': mesh_valid, 'lift_pose3d_valid': lift_joint_valid, 'reg_pose3d_valid': reg_joint_valid}
+
+        elif cfg.MODEL.name == 'posenet':
+            # default valid
+            joint_valid = np.ones((len(joint_coord_cam), 1), dtype=np.float32)
+            return joint_coord_img, joint_coord_cam, joint_valid
 
         return inputs, targets, meta
 
-    def evaluate_both(self, pred_mesh, target_mesh, pred_joint, target_joint):
+    def compute_joint_err(self, pred_joint, target_joint):
+        # root align joint
+        pred_joint, target_joint = pred_joint - pred_joint[:, :1, :], target_joint - target_joint[:, :1, :]
+
+        pred_joint, target_joint = pred_joint.detach().cpu().numpy(), target_joint.detach().cpu().numpy()
+
+        joint_mean_error = np.power((np.power((pred_joint - target_joint), 2)).sum(axis=2), 0.5).mean()
+
+        return joint_mean_error
+
+    def compute_both_err(self, pred_mesh, target_mesh, pred_joint, target_joint):
         # root joint align
         pred_mesh, target_mesh = pred_mesh - pred_joint[:, :1, :], target_mesh - target_joint[:, :1, :]
         pred_joint, target_joint = pred_joint - pred_joint[:, :1, :], target_joint - target_joint[:, :1, :]
@@ -247,6 +224,37 @@ class SURREAL(torch.utils.data.Dataset):
         joint_mean_error = np.power((np.power((pred_joint - target_joint), 2)).sum(axis=2), 0.5).mean()
 
         return joint_mean_error, mesh_mean_error
+
+    def evaluate_joint(self, outs):
+        print('Evaluation start...')
+        sample_num = len(outs)
+
+        mpjpe = np.zeros((sample_num, self.joint_num))  # pose error
+        pampjpe = np.zeros((sample_num, self.joint_num))  # pose error
+
+        for n in range(sample_num):
+            out = outs[n]
+
+            # render materials
+            pose_coord_out, pose_coord_gt = out['joint_coord'], out['joint_coord_target']
+
+            # root joint alignment
+            pose_coord_out, pose_coord_gt = pose_coord_out - pose_coord_out[:1], pose_coord_gt - pose_coord_gt[:1]
+
+            # pose error calculate
+            mpjpe[n] = np.sqrt(np.sum((pose_coord_out - pose_coord_gt) ** 2, 1))
+            # perform rigid alignment
+            pose_coord_out = rigid_align(pose_coord_out, pose_coord_gt)
+            pampjpe[n] = np.sqrt(np.sum((pose_coord_out - pose_coord_gt) ** 2, 1))
+
+        # total pose error (H36M joint set)
+        tot_err = np.mean(mpjpe)
+        eval_summary = 'MPJPE (mm)    >> tot: %.2f\n' % (tot_err)
+        print(eval_summary)
+
+        tot_err = np.mean(pampjpe)
+        eval_summary = 'PA-MPJPE (mm) >> tot: %.2f\n' % (tot_err)
+        print(eval_summary)
 
     def evaluate(self, outs):
         annots = self.datalist

@@ -1,5 +1,5 @@
 import torch.nn as nn
-from core.config import config as cfg
+from core.config import cfg as cfg
 from funcs_utils import load_checkpoint
 
 

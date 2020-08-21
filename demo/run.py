@@ -8,7 +8,7 @@ import numpy as np
 
 import __init_path
 import models
-from core.config import config as cfg
+from core.config import cfg
 from aug_utils import j2d_processing
 from coord_utils import get_bbox, process_bbox
 from funcs_utils import load_checkpoint, save_obj

@@ -10,15 +10,12 @@ import torch
 import scipy.sparse
 from pycocotools.coco import COCO
 
-from core.config import config as cfg
+from core.config import cfg
 from Human36M.noise_stats import error_distribution
-from funcs_utils import stop, save_obj
 from noise_utils import synthesize_pose
 from smpl import SMPL
 from coord_utils import process_bbox, get_bbox
-from coarsening import coarsen, laplacian, perm_index_reverse, lmax_L, rescale_L
-from graph_utils import build_graph, build_coarse_graphs
-from aug_utils import augm_params, j2d_processing, affine_transform
+from aug_utils import augm_params, j2d_processing, affine_transform, j3d_processing
 from vis import vis_3d_pose, vis_2d_pose
 
 
@@ -101,39 +98,6 @@ class MSCOCO(torch.utils.data.Dataset):
         flip_pairs = eval(f'self.{joint_category}_flip_pairs')
 
         return joint_num, skeleton, flip_pairs
-
-    def build_adj(self):
-        adj_matrix = np.zeros((self.joint_num, self.joint_num))
-        for line in self.skeleton:
-            adj_matrix[line] = 1
-            adj_matrix[line[1], line[0]] = 1
-        for lr in self.flip_pairs:
-            adj_matrix[lr] = 1
-            adj_matrix[lr[1], lr[0]] = 1
-
-        return adj_matrix + np.eye(self.joint_num)
-
-    def compute_graph(self, levels=9):
-        joint_adj = self.build_adj()
-        # Build graph
-        mesh_adj = build_graph(self.mesh_model.face, self.mesh_model.face.max() + 1)
-        graph_Adj, graph_L, graph_perm = coarsen(mesh_adj, levels=levels)
-        input_Adj = scipy.sparse.csr_matrix(joint_adj)
-        input_Adj.eliminate_zeros()
-        input_L = laplacian(input_Adj, normalized=True)
-
-        graph_L[-1] = input_L
-        graph_Adj[-1] = input_Adj
-
-        # Compute max eigenvalue of graph Laplacians, rescale Laplacian
-        graph_lmax = []
-        renewed_lmax = []
-        for i in range(levels):
-            graph_lmax.append(lmax_L(graph_L[i]))
-            graph_L[i] = rescale_L(graph_L[i], graph_lmax[i])
-        #     renewed_lmax.append(lmax_L(graph_L[i]))
-
-        return graph_Adj, graph_L, graph_perm, perm_index_reverse(graph_perm[0])
 
     def load_data(self):
         print('Load annotations of COCO')
@@ -255,7 +219,7 @@ class MSCOCO(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         data = copy.deepcopy(self.datalist[idx])
         img_shape, bbox, dp_data, smplify_result = data['img_shape'], data['bbox'], data['dp_data'], data['smplify_result']
-        flip, rot = 0, 0
+        flip, rot = augm_params(is_train=(self.data_split == 'train'))
         # img_name = img_path.split('/')[-1][:-4]
 
         smpl_param, cam_param = smplify_result['smpl_param'], smplify_result['cam_param']
@@ -281,18 +245,10 @@ class MSCOCO(torch.utils.data.Dataset):
         tight_bbox = get_bbox(joint_img)
         bbox = process_bbox(tight_bbox.copy())
 
-        # default valid
-        mesh_valid = np.ones((len(mesh_cam), 1), dtype=np.float32)
-        reg_joint_valid = np.ones((len(joint_cam_h36m), 1), dtype=np.float32)
-        lift_joint_valid = np.ones((len(joint_cam), 1), dtype=np.float32)
-        error = self.get_fitting_error(tight_bbox, data['joint_img'], joint_img_coco[:17], data['joint_valid'])
-        if error > self.fitting_thr:
-            mesh_valid[:], reg_joint_valid[:], lift_joint_valid[:] = 0, 0, 0
-
         # aug
         joint_img, trans = j2d_processing(joint_img.copy(), (cfg.MODEL.input_shape[1], cfg.MODEL.input_shape[0]),
-                                          bbox, rot, flip, None)
-        # no aug/transform for cam joints
+                                          bbox, rot, flip, self.flip_pairs)
+        joint_cam = j3d_processing(joint_cam, rot, flip, self.flip_pairs)
 
         if not cfg.DATASET.use_gt_input:
             joint_img = self.replace_joint_img(joint_img, bbox, trans)
@@ -305,11 +261,30 @@ class MSCOCO(torch.utils.data.Dataset):
         mean, std = np.mean(joint_img, axis=0), np.std(joint_img, axis=0)
         joint_img = (joint_img.copy() - mean) / std
 
-        inputs = {'pose2d': joint_img}
-        targets = {'mesh': mesh_cam / 1000, 'lift_pose3d': joint_cam, 'reg_pose3d': joint_cam_h36m}
-        meta = {'mesh_valid': mesh_valid, 'lift_pose3d_valid': lift_joint_valid, 'reg_pose3d_valid': reg_joint_valid}
+        if cfg.MODEL.name == 'pose2mesh_net':
+            # default valid
+            mesh_valid = np.ones((len(mesh_cam), 1), dtype=np.float32)
+            reg_joint_valid = np.ones((len(joint_cam_h36m), 1), dtype=np.float32)
+            lift_joint_valid = np.ones((len(joint_cam), 1), dtype=np.float32)
+            error = self.get_fitting_error(tight_bbox, data['joint_img'], joint_img_coco[:17], data['joint_valid'])
+            if error > self.fitting_thr:
+                mesh_valid[:], reg_joint_valid[:], lift_joint_valid[:] = 0, 0, 0
 
-        return inputs, targets, meta
+            inputs = {'pose2d': joint_img}
+            targets = {'mesh': mesh_cam / 1000, 'lift_pose3d': joint_cam, 'reg_pose3d': joint_cam_h36m}
+            meta = {'mesh_valid': mesh_valid, 'lift_pose3d_valid': lift_joint_valid, 'reg_pose3d_valid': reg_joint_valid}
+
+            return inputs, targets, meta
+
+        elif cfg.MODEL.name == 'posenet':
+            # default valid
+            joint_valid = np.ones((len(joint_cam), 1), dtype=np.float32)
+            # compute fitting error
+            error = self.get_fitting_error(tight_bbox, data['joint_img'], joint_img_coco[:17], data['joint_valid'])
+            if error > self.fitting_thr:
+                joint_valid[:, :] = 0
+
+            return joint_img, joint_cam, joint_valid
 
     def replace_joint_img(self, joint_img, bbox, trans):
         if self.input_joint_name == 'coco':

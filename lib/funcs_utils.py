@@ -11,13 +11,13 @@ import torch
 import torch.optim as optim
 import matplotlib.pyplot as plt
 
-from core.config import config
+from core.config import cfg
 
 
 def lr_check(optimizer, epoch):
     base_epoch = 5
     if False and epoch <= base_epoch:
-        lr_warmup(optimizer, config.TRAIN.lr, epoch, base_epoch)
+        lr_warmup(optimizer, cfg.TRAIN.lr, epoch, base_epoch)
 
     for param_group in optimizer.param_groups:
         curr_lr = param_group['lr']
@@ -76,23 +76,23 @@ def count_parameters(model):
 
 def get_optimizer(model):
     optimizer = None
-    if config.TRAIN.optimizer == 'sgd':
+    if cfg.TRAIN.optimizer == 'sgd':
         optimizer = optim.SGD(
             model.parameters(),
-            lr=config.TRAIN.lr,
-            momentum=config.TRAIN.momentum,
-            weight_decay=config.TRAIN.weight_decay,
-            nesterov=config.TRAIN.nesterov
+            lr=cfg.TRAIN.lr,
+            momentum=cfg.TRAIN.momentum,
+            weight_decay=cfg.TRAIN.weight_decay,
+            nesterov=cfg.TRAIN.nesterov
         )
-    elif config.TRAIN.optimizer == 'rmsprop':
+    elif cfg.TRAIN.optimizer == 'rmsprop':
         optimizer = optim.RMSprop(
             model.parameters(),
-            lr=config.TRAIN.lr
+            lr=cfg.TRAIN.lr
         )
-    elif config.TRAIN.optimizer == 'adam':
+    elif cfg.TRAIN.optimizer == 'adam':
         optimizer = optim.Adam(
             model.parameters(),
-            lr=config.TRAIN.lr
+            lr=cfg.TRAIN.lr
         )
 
     return optimizer
@@ -100,18 +100,18 @@ def get_optimizer(model):
 
 def get_scheduler(optimizer):
     scheduler = None
-    if config.TRAIN.scheduler == 'step':
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=config.TRAIN.lr_step, gamma=config.TRAIN.lr_factor)
-    elif config.TRAIN.scheduler == 'platue':
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=config.TRAIN.lr_factor, patience=10, min_lr=1e-5)
+    if cfg.TRAIN.scheduler == 'step':
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=cfg.TRAIN.lr_step, gamma=cfg.TRAIN.lr_factor)
+    elif cfg.TRAIN.scheduler == 'platue':
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=cfg.TRAIN.lr_factor, patience=10, min_lr=1e-5)
 
     return scheduler
 
 
 def save_checkpoint(states, epoch, is_best=None):
     file_name = f'checkpoint{epoch}.pth.tar'
-    output_dir = config.checkpoint_dir
-    if states['epoch'] == config.TRAIN.end_epoch:
+    output_dir = cfg.checkpoint_dir
+    if states['epoch'] == cfg.TRAIN.end_epoch:
         file_name = 'final.pth.tar'
     torch.save(states, os.path.join(output_dir, file_name))
 
@@ -155,5 +155,5 @@ def save_plot(data_list, epoch, title='Train Loss'):
                  arrowprops=dict(arrowstyle="simple", connectionstyle="angle3"),
                  xycoords=('axes fraction', 'data'), textcoords='offset points')
 
-    f.savefig(os.path.join(config.graph_dir, save_path))
+    f.savefig(os.path.join(cfg.graph_dir, save_path))
     plt.close(f)

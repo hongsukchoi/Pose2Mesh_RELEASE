@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from core.config import config
+from core.config import cfg
 from funcs_utils import stop
 
 

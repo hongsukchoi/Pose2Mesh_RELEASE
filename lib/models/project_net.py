@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from core.config import config
+from core.config import cfg
 
 
 class OptimzeCamLayer(nn.Module):

@@ -8,10 +8,8 @@ import scipy.sparse
 from pycocotools.coco import COCO
 
 import __init_path
-from coarsening import lmax_L, rescale_L
-from core.config import config as cfg
-from graph_utils import build_graph, build_coarse_graphs
-from coarsening import coarsen, laplacian, perm_index_reverse
+from core.config import cfg 
+from graph_utils import build_coarse_graphs
 from smpl import SMPL
 from coord_utils import process_bbox, get_bbox
 from aug_utils import j2d_processing
@@ -69,39 +67,6 @@ class COCOHuman(torch.utils.data.Dataset):
         datalist = sorted(datalist, key=lambda x: x['aid'])
 
         return datalist
-
-    def build_adj(self):
-        adj_matrix = np.zeros((self.joint_num, self.joint_num))
-        for line in self.skeleton:
-            adj_matrix[line] = 1
-            adj_matrix[line[1], line[0]] = 1
-        for lr in self.flip_pairs:
-            adj_matrix[lr] = 1
-            adj_matrix[lr[1], lr[0]] = 1
-
-        return adj_matrix + np.eye(self.joint_num)
-
-    def compute_graph(self, levels=9):
-        joint_adj = self.build_adj()
-        # Build graph
-        mesh_adj = build_graph(self.smpl.face, self.smpl.face.max() + 1)
-        graph_Adj, graph_L, graph_perm = coarsen(mesh_adj, levels=levels)
-        input_Adj = scipy.sparse.csr_matrix(joint_adj)
-        input_Adj.eliminate_zeros()
-        input_L = laplacian(input_Adj, normalized=True)
-
-        graph_L[-1] = input_L
-        graph_Adj[-1] = input_Adj
-
-        # Compute max eigenvalue of graph Laplacians, rescale Laplacian
-        graph_lmax = []
-        renewed_lmax = []
-        for i in range(levels):
-            graph_lmax.append(lmax_L(graph_L[i]))
-            graph_L[i] = rescale_L(graph_L[i], graph_lmax[i])
-        #     renewed_lmax.append(lmax_L(graph_L[i]))
-
-        return graph_Adj, graph_L, graph_perm, perm_index_reverse(graph_perm[0])
 
     def load_data(self):
         db = COCO(osp.join(self.annot_path, 'person_keypoints_' + self.data_split + '2017.json'))

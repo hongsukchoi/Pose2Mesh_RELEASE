@@ -5,12 +5,11 @@ import __init_path
 import shutil
 
 from funcs_utils import save_checkpoint, save_plot, check_data_pararell, count_parameters
-from core.config import config, update_config
+from core.config import cfg, update_config
 
 parser = argparse.ArgumentParser(description='Train Pose2Mesh')
 
 parser.add_argument('--seed', type=int, default=123, help='random seed to use. Default=123')
-parser.add_argument('--cpu', action='store_true', help='use cpu')
 parser.add_argument('--resume_training', action='store_true', help='Resume Training')
 parser.add_argument('--debug', action='store_true', help='reduce dataset items')
 parser.add_argument('--gpu', type=str, default='0,1', help='assign multi-gpus by comma concat')
@@ -22,17 +21,20 @@ if args.cfg:
     update_config(args.cfg)
 torch.manual_seed(args.seed)
 os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu)
-device = torch.device(f"cpu" if args.cpu else "cuda")
 print("Work on GPU: ", os.environ['CUDA_VISIBLE_DEVICES'])
 
-from core.base import Trainer, Tester
+from core.base import Trainer, Tester, LiftTrainer, LiftTester
 
 
-trainer = Trainer(args, load_dir='./experiment/exp_08-17_12:45/checkpoint')
-tester = Tester(args)  # if not args.debug else None
+if cfg.MODEL.name == 'pose2mesh_net':
+    trainer = Trainer(args, load_dir='')
+    tester = Tester(args)  # if not args.debug else None
+elif cfg.MODEL.name == 'posenet':
+    trainer = LiftTrainer(args, load_dir='')
+    tester = LiftTester(args)  # if not args.debug else None
 
 print("===> Start training...")
-for epoch in range(config.TRAIN.begin_epoch, config.TRAIN.end_epoch+1):
+for epoch in range(cfg.TRAIN.begin_epoch, cfg.TRAIN.end_epoch + 1):
     trainer.train(epoch)
     trainer.lr_scheduler.step()
 

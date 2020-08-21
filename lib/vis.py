@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import cv2
-from core.config import config
+from core.config import cfg
 
 
 def vis_2d_keypoints(img, kps, kps_line, bbox=None, kp_thre=0.4, alpha=1):
@@ -57,7 +57,7 @@ def vis_2d_pose(pred, img, kps_line, prefix='vis2dpose', bbox=None):
 
     now = datetime.now()
     file_name = f'{prefix}_{now.isoformat()[:-7]}_2d_joint.jpg'
-    cv2.imwrite(osp.join(config.vis_dir, file_name), tmpimg)
+    cv2.imwrite(osp.join(cfg.vis_dir, file_name), tmpimg)
     cv2.imshow(prefix, tmpimg)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
@@ -113,7 +113,7 @@ def vis_3d_pose(kps_3d, kps_line, joint_set_name='', prefix='vis3dpose', gt=Fals
 
         now = datetime.now()
         file_name = f'{prefix}_{now.isoformat()[:-7]}_{"3d_gt" if gt else "3d_pred"}.jpg'
-        fig.savefig(osp.join(config.vis_dir, file_name))
+        fig.savefig(osp.join(cfg.vis_dir, file_name))
         plt.close(fig=fig)
     else:
         return ax

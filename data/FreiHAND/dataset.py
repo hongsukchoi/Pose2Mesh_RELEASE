@@ -11,18 +11,15 @@ import transforms3d
 import scipy.sparse
 
 from pycocotools.coco import COCO
-from core.config import config as cfg
+from core.config import cfg 
 from _mano import MANO
 
-from coarsening import coarsen, laplacian, perm_index_reverse, lmax_L, rescale_L
-from display_utils import display_model
-from graph_utils import build_graph, build_coarse_graphs
+from graph_utils import build_coarse_graphs
 
 from coord_utils import process_bbox, get_bbox
 from aug_utils import j2d_processing
 from funcs_utils import save_obj, stop
 from vis import vis_3d_pose, vis_2d_pose
-from manopth.demo import display_hand
 
 
 class FreiHAND(torch.utils.data.Dataset):
@@ -48,48 +45,8 @@ class FreiHAND(torch.utils.data.Dataset):
         self.datalist_pose2d_det = self.load_pose2d_det(det_path)
         print("Check lengths of annotation and detection output: ", len(self.datalist), len(self.datalist_pose2d_det))
 
-        # self.graph_Adj, self.graph_L, self.graph_perm, self.graph_perm_reverse = self.compute_graph(levels=6)
-
         self.graph_Adj, self.graph_L, self.graph_perm, self.graph_perm_reverse = \
             build_coarse_graphs(self.mesh_model.face, self.joint_num, self.skeleton, self.joint_hori_conn, levels=6)
-
-    def build_adj(self):
-        joint_num = self.joint_num
-        skeleton = self.skeleton
-        horizontal_lines = self.joint_hori_conn
-        # flip_pairs
-
-        adj_matrix = np.zeros((joint_num, joint_num))
-        for line in skeleton:
-            adj_matrix[line] = 1
-            adj_matrix[line[1], line[0]] = 1
-        for line in horizontal_lines:
-            adj_matrix[line] = 1
-            adj_matrix[line[1], line[0]] = 1
-
-        return adj_matrix + np.eye(joint_num)
-
-    def compute_graph(self, levels=6):
-        joint_adj = self.build_adj()
-        # Build graph
-        mesh_adj = build_graph(self.mesh_model.face, self.mesh_model.face.max() + 1)
-        graph_Adj, graph_L, graph_perm = coarsen(mesh_adj, levels=levels)
-
-        input_Adj = scipy.sparse.csr_matrix(joint_adj)
-        input_Adj.eliminate_zeros()
-        input_L = laplacian(input_Adj, normalized=True)
-
-        graph_L[-1] = input_L
-        graph_Adj[-1] = input_Adj
-
-        # Compute max eigenvalue of graph Laplacians, rescale Laplacian
-        graph_lmax = []
-        renewed_lmax = []
-        for i in range(levels):
-            graph_lmax.append(lmax_L(graph_L[i]))
-            graph_L[i] = rescale_L(graph_L[i], graph_lmax[i])
-
-        return graph_Adj, graph_L, graph_perm, perm_index_reverse(graph_perm[0])
 
     def load_pose2d_det(self, det_path):
         datalist = []
@@ -174,10 +131,6 @@ class FreiHAND(torch.utils.data.Dataset):
         mano_mesh_coord = mano_mesh_coord.numpy().reshape(self.vertex_num, 3);
         mano_joint_coord = mano_joint_coord.numpy().reshape(self.joint_num, 3)
 
-        # milimeter -> meter
-        # mano_mesh_coord /= 1000;
-        # mano_joint_coord /= 1000;
-
         return mano_mesh_coord, mano_joint_coord
 
     def __len__(self):
@@ -201,11 +154,6 @@ class FreiHAND(torch.utils.data.Dataset):
         mesh_coord_cam = mano_coord_cam[:self.vertex_num];
         joint_coord_cam = mano_coord_cam[self.vertex_num:];
 
-        # default valid
-        mesh_valid = np.ones((len(mesh_coord_cam), 1), dtype=np.float32)
-        reg_joint_valid = np.ones((len(joint_coord_cam), 1), dtype=np.float32)
-        lift_joint_valid = np.ones((len(joint_coord_cam), 1), dtype=np.float32)
-
         # use det
         det_data = self.datalist_pose2d_det[idx]
         assert img_id == det_data['img_id']
@@ -227,14 +175,57 @@ class FreiHAND(torch.utils.data.Dataset):
         mean, std = np.mean(joint_coord_img, axis=0), np.std(joint_coord_img, axis=0)
         joint_coord_img = (joint_coord_img.copy() - mean) / std
 
-        inputs = {'pose2d': joint_coord_img}
-        targets = {'mesh': mesh_coord_cam / 1000, 'lift_pose3d': joint_coord_cam, 'reg_pose3d': joint_coord_cam}
-        meta = {'mesh_valid': mesh_valid, 'lift_pose3d_valid': lift_joint_valid, 'reg_pose3d_valid': reg_joint_valid}
+        if cfg.MODEL.name == 'pose2mesh_net':
+            # default valid
+            mesh_valid = np.ones((len(mesh_coord_cam), 1), dtype=np.float32)
+            reg_joint_valid = np.ones((len(joint_coord_cam), 1), dtype=np.float32)
+            lift_joint_valid = np.ones((len(joint_coord_cam), 1), dtype=np.float32)
 
-        return inputs, targets, meta
+            inputs = {'pose2d': joint_coord_img}
+            targets = {'mesh': mesh_coord_cam / 1000, 'lift_pose3d': joint_coord_cam, 'reg_pose3d': joint_coord_cam}
+            meta = {'mesh_valid': mesh_valid, 'lift_pose3d_valid': lift_joint_valid, 'reg_pose3d_valid': reg_joint_valid}
+            return inputs, targets, meta
 
-    def evaluate_both(self, pred_mesh, target_mesh, pred_joint, target_joint):
+        elif cfg.MODEL.name == 'posenet':
+            # default valid
+            joint_valid = np.ones((len(joint_coord_cam), 1), dtype=np.float32)
+            return joint_coord_img, joint_coord_cam, joint_valid
+
+    def compute_joint_err(self, pred_joint, target_joint):
+        return 0
+
+    def compute_both_err(self, pred_mesh, target_mesh, pred_joint, target_joint):
         return 0, 0
+
+    def evaluate_joint(self, outs):
+        print('Evaluation start...')
+        annots = self.datalist
+        assert len(annots) == len(outs)
+        sample_num = len(annots)
+
+        mesh_output_save = []
+        joint_output_save = []
+        for n in range(sample_num):
+            annot = annots[n]
+            out = outs[n]
+
+            joint_coord_out = out['joint_coord']
+            mesh_coord_out = joint_coord_out  # dummy
+
+            mesh_coord_out = mesh_coord_out - joint_coord_out[:1]
+            joint_coord_out = joint_coord_out - joint_coord_out[:1]
+
+            mesh_output_save.append(mesh_coord_out.tolist())
+            joint_output_save.append(joint_coord_out.tolist())
+
+            vis = False
+            if vis:
+                filename = str(n)
+                save_obj(mesh_coord_out, self.mano.face, osp.join(cfg.output_dir, filename + '.obj'))
+
+        output_save_path = osp.join(cfg.output_dir, 'pred.json')
+        with open(output_save_path, 'w') as f:
+            json.dump([joint_output_save, mesh_output_save], f)
 
     def evaluate(self, outs):
         print('Evaluation start...')
@@ -259,25 +250,6 @@ class FreiHAND(torch.utils.data.Dataset):
             if vis and n % 500 == 0:
                 filename = str(n)
                 save_obj(mesh_coord_out, self.mesh_model.face, osp.join(cfg.vis_dir, filename + '.obj'))
-                """
-                save_obj(mesh_coord_out + annot['joint_cam'][self.root_joint_idx,None,:], self.mano.face, filename + '.obj')
-
-                # camera parameter save in open3d format (extrinsic and intrinsic should be transposed)
-                extrinsic = np.eye(4).transpose(1,0).reshape(-1).tolist()
-                focal, princpt = annot['cam_param']['focal'], annot['cam_param']['princpt']
-                focal = [float(x) for x in focal]; princpt = [float(x) for x in princpt];
-                intrinsic = {
-                            'height': annot['img_shape'][0], \
-                            'width': annot['img_shape'][1], \
-                            'intrinsic_matrix': [focal[0], 0.0, 0.0, \
-                                                0.0, focal[1], 0.0, \
-                                                princpt[0], princpt[1], 1.0]
-                            }
-
-                _cam_param = {'class_name': 'PinholeCameraParameters', 'extrinsic': extrinsic, 'intrinsic': intrinsic, 'version_major': 1, 'version_minor': 0}
-                with open(filename + '_cam_param.json', 'w') as f:
-                    json.dump(_cam_param, f)
-                """
 
         output_save_path = osp.join(cfg.output_dir, 'pred.json')
         with open(output_save_path, 'w') as f:

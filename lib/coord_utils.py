@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from torch.nn import functional as F
-from core.config import config
+from core.config import cfg
 
 
 def get_center_scale(box_info):
@@ -54,7 +54,7 @@ def process_bbox(bbox, aspect_ratio=None, scale=1.0):
     c_x = bbox[0] + w/2.
     c_y = bbox[1] + h/2.
     if aspect_ratio is None:
-        aspect_ratio = config.MODEL.input_shape[1]/config.MODEL.input_shape[0]
+        aspect_ratio = cfg.MODEL.input_shape[1] / cfg.MODEL.input_shape[0]
     if w > aspect_ratio * h:
         h = w / aspect_ratio
     elif w < aspect_ratio * h:

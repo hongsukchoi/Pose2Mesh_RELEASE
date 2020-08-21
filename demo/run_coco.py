@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 import __init_path
 import models
-from core.config import config as cfg
+from core.config import cfg 
 from funcs_utils import get_optimizer, load_checkpoint, get_scheduler, count_parameters, stop, lr_check
 from models import project_net
 from vis import vis_2d_pose, vis_3d_pose
