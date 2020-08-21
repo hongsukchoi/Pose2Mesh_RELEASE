@@ -126,7 +126,7 @@ ${ROOT}
 - All annotation files follow [MS COCO format](https://cocodataset.org/#format-data).
 - If you want to add your own dataset, you have to convert it to [MS COCO format](https://cocodataset.org/#format-data).
 - Images need to to be downloaded, but if needed you can download them from their offical sites.
-- 2D pose detection outputs can be download here: [Human36M](https://drive.google.com/drive/folders/1iRuNa6CqoHbloJ-wFPpW6g72QmP9xZT-?usp=sharing), [COCO](https://drive.google.com/drive/folders/1x0lLocLWloN813njSTsP0K09opTcLULE?usp=sharing), [3DPW](https://drive.google.com/drive/folders/1qt5R4wMTP1FSUtSi52lUke3EQazNkqVh?usp=sharing), [SURREAL](https://drive.google.com/drive/folders/1dkHOZwaflluUCPZpbLwio9s3kN1QwHz8?usp=sharing), [FreiHAND](https://drive.google.com/drive/folders/1QfAoCNTuQKbFTIoS5p9Hm_4IRdM5xVif?usp=sharing)
+- 2D pose detection outputs can be downloaded here: [Human36M](https://drive.google.com/drive/folders/1iRuNa6CqoHbloJ-wFPpW6g72QmP9xZT-?usp=sharing), [COCO](https://drive.google.com/drive/folders/1x0lLocLWloN813njSTsP0K09opTcLULE?usp=sharing), [3DPW](https://drive.google.com/drive/folders/1qt5R4wMTP1FSUtSi52lUke3EQazNkqVh?usp=sharing), [SURREAL](https://drive.google.com/drive/folders/1dkHOZwaflluUCPZpbLwio9s3kN1QwHz8?usp=sharing), [FreiHAND](https://drive.google.com/drive/folders/1QfAoCNTuQKbFTIoS5p9Hm_4IRdM5xVif?usp=sharing)
 
 If you have a problem with 'download limit' when trying to download datasets from google drive links, please try this trick.
 >* Go the shared folder, which contains files you want to copy to your drive  
@@ -188,18 +188,33 @@ ${ROOT}
 ## Running Pose2Mesh
 
 ![joint set topology](./asset/joint_sets.png)
+
 ### Start
-- In the `lib/core/config.py`, you can change settings of the system including a train/test dataset to use, a pre-defined joint set (one of Human36M, COCO, MANO, SMPL defined joint sets), a pre-trained PoseNet, a learning schedule, GT usage, and so on.
-- Pose2Mesh uses different joint sets from Human3.6M, COCO, SMPL, MANO for Human3.6M, 3DPW, SURREAL, FreiHAND benchmarks respectively. For the COCO joint set, we manually add 'Pelvis' and 'Neck' joints by computing the middle point of 'L_Hip' and 'R_Hip', and 'L_Shoulder' and 'R_Shoulder' respectively.
-- To train/test PoseNet, please refer to the [PoseNet branch]() # TO BE ADDED.
+- Pose2Mesh uses different joint sets from Human3.6M, COCO, SMPL, and MANO for Human3.6M, 3DPW, SURREAL, and FreiHAND benchmarks respectively. For the COCO joint set, we manually add 'Pelvis' and 'Neck' joints by computing the middle point of 'L_Hip' and 'R_Hip', and 'L_Shoulder' and 'R_Shoulder' respectively.
+- In the `lib/core/config.py`, you can change settings of the system including a train/test dataset to use, a pre-defined joint set, a pre-trained PoseNet, a learning schedule, GT usage, and so on. 
+- Note that the first dataset on the `DATASET.{train/test}_list` should call `build_coarse_graphs` function for the graph convolution setting. Refer to the last line of `__init__` function in `${ROOT}/data/Human36M/dataset.py`. 
+
 
 ### Train
 
-Select the config file in `${ROOT}/asset/yaml/` and train. You can change the train set and pretrained posenet. Note that the first dataset on the list should call `build_coarse_graphs` function for the graph convolution setting. Refer to the last line of `__init__` function in `${ROOT}/data/Human36M/dataset.py`. 
+Select the config file in `${ROOT}/asset/yaml/` and train. You can change the train set and pretrained posenet by your own `*.yml` file. 
+
+**1. Pre-train PoseNet**
+
+To train from the scratch, you should pre-train PoseNet first.
 
 Run
 ```
-python main/train.py --gpu 0,1,2,3 --cfg ./asset/yaml/*.yml
+python main/train.py --gpu 0,1,2,3 --cfg ./asset/yaml/posenet_{input joint set}_train_{dataset list}.yml
+```
+
+**2. Train Pose2Mesh**
+
+Copy `best.pth.tar` in `${ROOT}/experiment/exp_*/checkpoint/` to `${ROOT}/experiment/posenet_{input joint set}_train_{dataset list}/`. Or download the pretrained weights following [this](#pretrained-model-weights).
+
+Run
+```
+python main/train.py --gpu 0,1,2,3 --cfg ./asset/yaml/pose2mesh_{input joint set}_train_{dataset list}.yml
 ```
 
 
@@ -209,7 +224,7 @@ Select the config file in `${ROOT}/asset/yaml/` and test. You can change the pre
 
 Run
 ```
-python main/test.py --gpu 0,1,2,3 --cfg ./asset/yaml/*.yml
+python main/test.py --gpu 0,1,2,3 --cfg ./asset/yaml/{model name}_{input joint set}_test_{dataset name}.yml
 ```
 
 ### Reference
