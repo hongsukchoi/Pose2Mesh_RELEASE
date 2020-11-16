@@ -23,6 +23,8 @@ This repository is the offical [Pytorch](https://pytorch.org/) implementation of
 ## Results
 Here I report the performance of Pose2Mesh.
 
+__Update:__ The performance on 3DPW has increased using [DarkPose](https://github.com/ilovepose/DarkPose) 2D detection, which improved [HRNet](https://github.com/leoxiaobin/deep-high-resolution-net.pytorch).
+
 ![table](./asset/tab.png)
 
 Below shows the results when the input is **groundtruth** 2D human poses.
@@ -89,6 +91,7 @@ ${ROOT}
 |   |   |   |-- 3DPW_train.json
 |   |   |   |-- 3DPW_validation.json
 |   |   |   |-- 3DPW_test.json
+|   |   |   |-- darkpose_output_on_testset.json
 |   |   |   |-- hrnet_output_on_testset.json
 |   |   |   |-- simple_output_on_testset.json
 |   |   |-- imageFiles
