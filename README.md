@@ -125,7 +125,7 @@ ${ROOT}
 - Download AMASS SMPL parameters [[offical site](https://amass.is.tue.mpg.de/)]
 - Download SURREAL parsed data [[data](https://drive.google.com/drive/folders/1vvJXM0WYzbkjTTVAFsfXRAdyAwAhEPPh?usp=sharing)] 
 - Download 3DPW parsed data [[data](https://drive.google.com/drive/folders/1fWrx0jnWzcudU6FN6QCZWefaOFSAadgR)]
-- Download FreiHAND parsed data [[data](https://drive.google.com/drive/folders/1QGWu_nWi5eyrWSkPEOMyK1tAGFWRXQjC)] (`bbox` in `freihand_eval_coco.json` is from [Detectron2](https://github.com/facebookresearch/detectron2))
+- Download FreiHAND parsed data [[data](https://drive.google.com/drive/folders/1syj8KEGxHV6lXGOStJGJ6qGaIol-4xD7?usp=sharing)] (`bbox` in `freihand_eval_coco.json` is from [Detectron2](https://github.com/facebookresearch/detectron2))
 - All annotation files follow [MS COCO format](https://cocodataset.org/#format-data).
 - If you want to add your own dataset, you have to convert it to [MS COCO format](https://cocodataset.org/#format-data).
 - Images need to to be downloaded, but if needed you can download them from their offical sites.
