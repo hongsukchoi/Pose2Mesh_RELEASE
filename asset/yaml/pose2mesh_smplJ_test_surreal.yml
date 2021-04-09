@@ -34,5 +34,5 @@ AUG:
 TEST:
     batch_size: 64
     shuffle: False
-    weight_path: './experiment/pose2mesh_smplJ_train_surreal'
+    weight_path: './experiment/pose2mesh_smplJ_train_surreal/final.pth.tar'
     vis: True

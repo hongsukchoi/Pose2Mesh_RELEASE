@@ -34,5 +34,5 @@ AUG:
 TEST:
     batch_size: 64
     shuffle: False
-    weight_path: './experiment/pose2mesh_manoJ_train_freihand'
+    weight_path: './experiment/pose2mesh_manoJ_train_freihand/final.pth.tar'
     vis: True

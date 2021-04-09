@@ -13,7 +13,7 @@ MODEL:
     edge_loss_weight: 20
     joint_loss_weight: 0.001
     posenet_pretrained: True
-    posenet_path: './experiment/posenet_smplJ_train_surreal'
+    posenet_path: './experiment/posenet_smplJ_train_surreal/final.pth.tar'
 
 TRAIN:
     print_freq: 10

@@ -13,7 +13,7 @@ MODEL:
     edge_loss_weight: 20
     joint_loss_weight: 0.001
     posenet_pretrained: True
-    posenet_path: './experiment/posenet_manoJ_train_freihand'
+    posenet_path: './experiment/posenet_manoJ_train_freihand/final.pth.tar'
 
 TRAIN:
     print_freq: 10

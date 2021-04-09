@@ -29,4 +29,4 @@ AUG:
 TEST:
     batch_size: 64
     shuffle: False
-    weight_path: './experiment/posenet_cocoJ_train_human36_coco_muco'
+    weight_path: './experiment/posenet_cocoJ_train_human36_coco_muco/final.pth.tar'
