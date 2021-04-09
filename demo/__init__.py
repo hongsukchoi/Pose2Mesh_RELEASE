@@ -1,1 +1,0 @@
-from .COCO import COCOHuman

@@ -14,11 +14,17 @@ This repository is the offical [Pytorch](https://pytorch.org/) implementation of
 
 ## Quick demo
 - Download the pre-trained Pose2Mesh according to [this](#pretrained-model-weights).
-- Prepare SMPL and MANO layers according to [this](#pytorch-smpl-and-mano-layer)
+- Prepare SMPL and MANO layers according to [this](#pytorch-smpl-and-mano-layer).
 - Prepare a pose input, for instance, as `input.npy`. `input.npy` should contain the coordinates of 2D human joints, which follow the topology of joint sets defined [here](#start). The joint orders can be found in each `${ROOT}/data/*/dataset.py`.
-- Run `python demo/run.py --gpu 0 --res 500 --input input.npy --joint_set {human36,coco,smpl,mano}`
-- The outputs `demo_2Dpose.png`, `demo_mesh.png` will be saved in `${ROOT}/demo/result/`.
-- To visualize the Pose2Mesh predictions on COCO validation set, prepare COCO data according to [this](#data), and run `python demo/run_coco.py --gpu 0 --res 500 --sample_num 10`.
+### Demo on a single person
+- Run `python demo/run.py --gpu 0 --input_pose demo/h36m_joint_input.npy --joint_set human36`.
+- You can replace `demo/h36m_joint_input.npy` and `human36` with your input numpy file and one of `{human36,coco,smpl,mano}`.
+- Add `--input_img {img_path}` on the command if you want to a rendered mesh overlayed on an input image.
+- The outputs `demo_pose2d.png`, `demo_mesh.png`, and `demo_mesh_.obj` will be saved in `${ROOT}/demo/result/`.
+### Demo on multiple people
+- Run `python demo/run.py --gpu 0`.
+- Outputs on a sampled image from [CrowdPose datasest](https://github.com/MVIG-SJTU/AlphaPose/blob/pytorch/doc/CrowdPose.md) will be saved in `${ROOT}/demo/result/`.
+- You can change an input image and some details in lines 264~278 of `${ROOT}/demo/run.py`.
 
 ## Results
 Here I report the performance of Pose2Mesh.

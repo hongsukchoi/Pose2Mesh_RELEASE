@@ -5,10 +5,10 @@ from core.config import cfg
 
 
 class OptimzeCamLayer(nn.Module):
-    def __init__(self):
+    def __init__(self, crop_size):
         super(OptimzeCamLayer, self).__init__()
 
-        self.img_res = 500 / 2
+        self.img_res = crop_size / 2
         self.cam_param = nn.Parameter(torch.rand((1,3)))
 
     def forward(self, pose3d):
@@ -17,8 +17,8 @@ class OptimzeCamLayer(nn.Module):
         return output
 
 
-def get_model():
-    model = OptimzeCamLayer()
+def get_model(crop_size):
+    model = OptimzeCamLayer(crop_size)
 
     return model
 
