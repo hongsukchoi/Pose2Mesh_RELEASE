@@ -2,6 +2,10 @@
 ![pose to mesh](./asset/pose_mesh.png)
 ![quality results](./asset/quality_result.png)
 
+## News
+- Update 21.04.09: Update 3DPW evaluation code. Add temporal smoothing code and PA-MPVPE calculation code. They are commented for faster evaluation, but you can uncomment them in `evaluate` function of `${ROOT}/data/PW3D/dataset.py`. 
+- Update 21.04.09: Add demo on multiple people, and make a rendered mesh be overlayed on an input image
+- Update 20.11.016: Increased accuracy on 3DPW using DarkPose 2D pose outputs.
 
 ## Introduction
 This repository is the offical [Pytorch](https://pytorch.org/) implementation of [Pose2Mesh: Graph Convolutional Network for 3D Human Pose and Mesh Recovery from a 2D Human Pose (ECCV 2020)](https://arxiv.org/abs/2008.09047). Below is the overall pipeline of Pose2Mesh.
@@ -22,6 +26,7 @@ This repository is the offical [Pytorch](https://pytorch.org/) implementation of
 - Add `--input_img {img_path}` on the command if you want to a rendered mesh overlayed on an input image.
 - The outputs `demo_pose2d.png`, `demo_mesh.png`, and `demo_mesh_.obj` will be saved in `${ROOT}/demo/result/`.
 ### Demo on multiple people
+- Download demo input from [here](https://drive.google.com/drive/folders/1Vk-R_9MdoRflclfN2iQVWjxlFAHHe4bG?usp=sharing) and place them under `${ROOT}/demo/`.
 - Run `python demo/run.py --gpu 0`.
 - Outputs on a sampled image from [CrowdPose datasest](https://github.com/MVIG-SJTU/AlphaPose/blob/pytorch/doc/CrowdPose.md) will be saved in `${ROOT}/demo/result/`.
 - You can change an input image and some details in lines 264~278 of `${ROOT}/demo/run.py`.
@@ -29,7 +34,7 @@ This repository is the offical [Pytorch](https://pytorch.org/) implementation of
 ## Results
 Here I report the performance of Pose2Mesh.
 
-__Update:__ The performance on 3DPW has increased using [DarkPose](https://github.com/ilovepose/DarkPose) 2D detection, which improved [HRNet](https://github.com/leoxiaobin/deep-high-resolution-net.pytorch).
+:muscle: __Update:__ The performance on 3DPW has increased using [DarkPose](https://github.com/ilovepose/DarkPose) 2D detection, which improved [HRNet](https://github.com/leoxiaobin/deep-high-resolution-net.pytorch).
 
 ![table](./asset/tab.png)
 
@@ -94,12 +99,10 @@ ${ROOT}
 |   |   |-- hrnet_output_on_valset.json
 |   |-- PW3D 
 |   |   |-- data
-|   |   |   |-- 3DPW_train.json
-|   |   |   |-- 3DPW_validation.json
-|   |   |   |-- 3DPW_test.json
-|   |   |   |-- darkpose_output_on_testset.json
-|   |   |   |-- hrnet_output_on_testset.json
-|   |   |   |-- simple_output_on_testset.json
+|   |   |   |-- 3DPW_latest_train.json
+|   |   |   |-- 3DPW_latest_validation.json
+|   |   |   |-- darkpose_3dpw_testset_output.json
+|   |   |   |-- darkpose_3dpw_validationset_output.json
 |   |   |-- imageFiles
 |   |-- AMASS
 |   |   |-- data
@@ -130,7 +133,7 @@ ${ROOT}
 - Download COCO SMPL parameters [[SMPL parameters from SMPLify](https://drive.google.com/drive/folders/1X7OMEGQJOe0Tcn2GvvP1koKkq4yghIzr?usp=sharing)]  
 - Download AMASS SMPL parameters [[offical site](https://amass.is.tue.mpg.de/)]
 - Download SURREAL parsed data [[data](https://drive.google.com/drive/folders/1vvJXM0WYzbkjTTVAFsfXRAdyAwAhEPPh?usp=sharing)] 
-- Download 3DPW parsed data [[data](https://drive.google.com/drive/folders/1fWrx0jnWzcudU6FN6QCZWefaOFSAadgR)]
+- Download 3DPW parsed data [[data](https://drive.google.com/drive/folders/1pT0Ix3FxieEQf0HhEbMN1o-DWRzw2Ugh?usp=sharing)]
 - Download FreiHAND parsed data [[data](https://drive.google.com/drive/folders/1syj8KEGxHV6lXGOStJGJ6qGaIol-4xD7?usp=sharing)] (`bbox` in `freihand_eval_coco.json` is from [Detectron2](https://github.com/facebookresearch/detectron2))
 - All annotation files follow [MS COCO format](https://cocodataset.org/#format-data).
 - If you want to add your own dataset, you have to convert it to [MS COCO format](https://cocodataset.org/#format-data).

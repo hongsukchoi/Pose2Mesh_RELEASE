@@ -16,7 +16,7 @@ MODEL:
 
 TRAIN:
     print_freq: 10
-    batch_size: 64
+    batch_size: 128
     shuffle: True
     begin_epoch: 1
     end_epoch: 15
