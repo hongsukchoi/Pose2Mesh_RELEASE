@@ -15,7 +15,7 @@ from Human36M.noise_stats import error_distribution
 from noise_utils import synthesize_pose
 from smpl import SMPL
 from coord_utils import process_bbox, get_bbox
-from aug_utils import augm_params, j2d_processing, affine_transform, j3d_processing
+from aug_utils import augm_params, j2d_processing, affine_transform, j3d_processing, flip_2d_joint
 from vis import vis_3d_pose, vis_2d_pose
 
 
@@ -246,12 +246,12 @@ class MSCOCO(torch.utils.data.Dataset):
         bbox = process_bbox(tight_bbox.copy())
 
         # aug
-        joint_img, trans = j2d_processing(joint_img.copy(), (cfg.MODEL.input_shape[1], cfg.MODEL.input_shape[0]),
-                                          bbox, rot, flip, self.flip_pairs)
-        joint_cam = j3d_processing(joint_cam, rot, flip, self.flip_pairs)
-
+        joint_img, trans = j2d_processing(joint_img.copy(), (cfg.MODEL.input_shape[1], cfg.MODEL.input_shape[0]), bbox, rot, 0, None)
         if not cfg.DATASET.use_gt_input:
-            joint_img = self.replace_joint_img(joint_img, bbox, trans)
+            joint_img = self.replace_joint_img(joint_img, tight_bbox, trans)
+        if flip:
+            joint_img = flip_2d_joint(joint_img, cfg.MODEL.input_shape[1], self.flip_pairs)
+        joint_cam = j3d_processing(joint_cam, rot, flip, self.flip_pairs)
 
         #  -> 0~1
         joint_img = joint_img[:, :2]

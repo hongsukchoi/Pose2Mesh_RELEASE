@@ -149,6 +149,48 @@ def rigid_align(A, B):
     return A2
 
 
+def euler2mat(theta, to_4x4=False):
+    assert theta.shape[-1] == 3
+
+    original_shape = list(theta.shape)
+    original_shape.append(3)
+
+    theta = theta.view(-1, 3)
+    theta_x = theta[:, 0:1]
+    theta_y = theta[:, 1:2]
+    theta_z = theta[:, 2:3]
+
+    R_x = torch.cat([ \
+        torch.stack([torch.ones_like(theta_x), torch.zeros_like(theta_x), torch.zeros_like(theta_x)], 2), \
+        torch.stack([torch.zeros_like(theta_x), torch.cos(theta_x), -torch.sin(theta_x)], 2), \
+        torch.stack([torch.zeros_like(theta_x), torch.sin(theta_x), torch.cos(theta_x)], 2) \
+        ], 1)
+
+    R_y = torch.cat([ \
+        torch.stack([torch.cos(theta_y), torch.zeros_like(theta_y), torch.sin(theta_y)], 2), \
+        torch.stack([torch.zeros_like(theta_y), torch.ones_like(theta_y), torch.zeros_like(theta_y)], 2), \
+        torch.stack([-torch.sin(theta_y), torch.zeros_like(theta_y), torch.cos(theta_y)], 2), \
+        ], 1)
+
+    R_z = torch.cat([ \
+        torch.stack([torch.cos(theta_z), -torch.sin(theta_z), torch.zeros_like(theta_z)], 2), \
+        torch.stack([torch.sin(theta_z), torch.cos(theta_z), torch.zeros_like(theta_z)], 2), \
+        torch.stack([torch.zeros_like(theta_z), torch.zeros_like(theta_z), torch.ones_like(theta_z)], 2), \
+        ], 1)
+
+    R = torch.bmm(R_z, torch.bmm(R_y, R_x))
+
+    if to_4x4:
+        batch_size = R.shape[0]
+        R = torch.cat([R, torch.zeros((batch_size, 3, 1)).cuda().float()], 2)
+        R = torch.cat([R, torch.cuda.FloatTensor([0, 0, 0, 1])[None, None, :].repeat(batch_size, 1, 1)], 1)  # 0001
+        original_shape[-2] = 4;
+        original_shape[-1] = 4
+
+    R = R.view(original_shape)
+    return R
+
+
 def compute_error_accel(joints_gt, joints_pred, vis=None):
     """
     Computes acceleration error:

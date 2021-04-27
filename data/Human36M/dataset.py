@@ -15,7 +15,7 @@ from noise_utils import synthesize_pose
 
 from smpl import SMPL
 from coord_utils import world2cam, cam2pixel, process_bbox, rigid_align, get_bbox
-from aug_utils import affine_transform, j2d_processing, augm_params, j3d_processing
+from aug_utils import affine_transform, j2d_processing, augm_params, j3d_processing, flip_2d_joint
 from Human36M.noise_stats import error_distribution
 
 from funcs_utils import save_obj, stop
@@ -361,16 +361,17 @@ class Human36M(torch.utils.data.Dataset):
             joint_img, joint_cam = joint_img_h36m, joint_cam_h36m
 
         # make new bbox
-        bbox = get_bbox(joint_img)
-        bbox = process_bbox(bbox.copy())
+        tight_bbox = get_bbox(joint_img)
+        bbox = process_bbox(tight_bbox.copy())
 
         # aug
-        joint_img, trans = j2d_processing(joint_img.copy(), (cfg.MODEL.input_shape[1], cfg.MODEL.input_shape[0]),
-                                          bbox, rot, flip, self.flip_pairs)
+        joint_img, trans = j2d_processing(joint_img.copy(), (cfg.MODEL.input_shape[1], cfg.MODEL.input_shape[0]), bbox, rot, 0, None)
+        if not cfg.DATASET.use_gt_input:
+            joint_img = self.replace_joint_img(idx, img_id, joint_img, tight_bbox, trans)
+        if flip:
+            joint_img = flip_2d_joint(joint_img, cfg.MODEL.input_shape[1], self.flip_pairs)
         joint_cam = j3d_processing(joint_cam, rot, flip, self.flip_pairs)
 
-        if not cfg.DATASET.use_gt_input:
-            joint_img = self.replace_joint_img(idx, img_id, joint_img, bbox, trans)
 
         # vis
         # img = cv2.imread(img_path, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
@@ -407,10 +408,12 @@ class Human36M(torch.utils.data.Dataset):
         elif cfg.MODEL.name == 'posenet':
             # default valid
             joint_valid = np.ones((len(joint_cam), 1), dtype=np.float32)
+
             # if fitted mesh is too far from h36m gt, discard it
-            error = self.get_fitting_error(joint_cam_h36m, mesh_cam)
-            if (error > self.fitting_thr) and (self.input_joint_name == 'coco'):
-                joint_valid[:] = 0
+            if self.input_joint_name == 'coco':
+                error = self.get_fitting_error(joint_cam_h36m, mesh_cam)
+                if (error > self.fitting_thr):
+                    joint_valid[:] = 0
 
             return joint_img, joint_cam, joint_valid
 

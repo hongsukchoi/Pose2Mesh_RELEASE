@@ -1,0 +1,39 @@
+DATASET:
+    train_list: ['Human36M', 'COCO', 'AMASS']
+    test_list: ['PW3D']
+    input_joint_set: 'coco'
+    target_joint_set: 'human36'
+    workers: 16
+    use_gt_input: False
+
+MODEL:
+    name: 'pose2mesh_net'
+    input_shape: [384, 288]
+    normal_loss_weight: 0.1
+    edge_loss_weight: 20
+    joint_loss_weight: 0.001
+    posenet_pretrained: True
+    posenet_path: './experiment/exp_04-05_15:57/checkpoint/best.pth.tar'
+
+TRAIN:
+    print_freq: 10
+    batch_size: 64
+    shuffle: True
+    begin_epoch: 1
+    end_epoch: 15
+    edge_loss_start: 7
+    scheduler: 'step'
+    lr: 0.001
+    lr_step: [10]
+    lr_factor: 0.1
+    optimizer: 'rmsprop'
+    resume_path: './experiment/exp_04-13_20:19/checkpoint/checkpoint9.pth.tar'
+
+
+AUG:
+    flip: False
+    rotate_factor: 0
+
+TEST:
+    batch_size: 64
+    shuffle: False

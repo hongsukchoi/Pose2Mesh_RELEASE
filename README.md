@@ -3,6 +3,7 @@
 ![quality results](./asset/quality_result.png)
 
 ## News
+- Update 21.04.27: Update PoseFix code and AMASS dataloader. Lowered PA-MPJPE, MPVPE on 3DPW!
 - Update 21.04.09: Update 3DPW evaluation code. Add temporal smoothing code and PA-MPVPE calculation code. They are commented for faster evaluation, but you can uncomment them in `evaluate` function of `${ROOT}/data/PW3D/dataset.py`. 
 - Update 21.04.09: Add demo on multiple people, and make a rendered mesh be overlayed on an input image
 - Update 20.11.016: Increased accuracy on 3DPW using DarkPose 2D pose outputs.
@@ -34,6 +35,7 @@ This repository is the offical [Pytorch](https://pytorch.org/) implementation of
 ## Results
 Here I report the performance of Pose2Mesh.
 
+:muscle: __Update:__ We increased the performance on 3DPW using GT meshes obtained from [NeuralAnnot](https://arxiv.org/abs/2011.11232) on COCO and AMASS.  
 :muscle: __Update:__ The performance on 3DPW has increased using [DarkPose](https://github.com/ilovepose/DarkPose) 2D detection, which improved [HRNet](https://github.com/leoxiaobin/deep-high-resolution-net.pytorch).
 
 ![table](./asset/tab.png)

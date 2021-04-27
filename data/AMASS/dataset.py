@@ -16,8 +16,8 @@ from core.config import cfg
 from funcs_utils import stop
 from noise_utils import synthesize_pose
 from smpl import SMPL
-from coord_utils import cam2pixel, process_bbox, get_bbox
-from aug_utils import augm_params, j2d_processing, affine_transform, j3d_processing
+from coord_utils import cam2pixel, process_bbox, get_bbox, euler2mat
+from aug_utils import augm_params, j2d_processing, affine_transform, j3d_processing, flip_2d_joint
 from vis import vis_3d_pose, vis_2d_pose
 
 
@@ -107,12 +107,16 @@ class AMASS_CMU(torch.utils.data.Dataset):
         for sub in sub_dataset_list:
             sub_name = sub.split('/')[-1]
 
+            if cfg.MODEL.name == 'pose2mesh_net':
+                if 'CMU' not in sub_name:
+                    continue
+            elif cfg.MODEL.name == 'posenet':
+                if 'CMU' not in sub_name and 'BML' not in sub_name:
+                    continue
+
             sampling_ratio = self.get_subsampling_ratio(sub_name.lower())
             seq_name_list = glob.glob(f'{sub}/*')
             for seq in seq_name_list:
-                if 'cmu' not in seq:
-                    continue
-
                 file_list = glob.glob(f'{seq}/*_poses.npz')
                 for file in file_list:
                     # data load
@@ -130,10 +134,22 @@ class AMASS_CMU(torch.utils.data.Dataset):
                         pose = poses[frame_idx:frame_idx+1, :72]
                         beta = betas[None, :10]
 
+                        # # set camera parameters
+                        # x_rot, y_rot = math.pi/2, math.pi
+                        # sR = torch.FloatTensor([x_rot, y_rot, 0])
+                        # sR = euler2mat(sR).numpy()
+                        #
+                        # elevation = 0# random.uniform(- math.pi / 3, math.pi / 3)  # set random elevation here
+                        # azimuth = random.uniform(- math.pi, + math.pi)  # set random azimuth here
+                        #
+                        # R = torch.FloatTensor([elevation, azimuth, 0])
+                        # R = euler2mat(R).numpy()
+                        # R = np.dot(R, sR)
+
                         # set camera parameters
                         for R in h36m_cam_Rs:
-                            t = np.array([0, 0, 1])
-                            focal = [250, 250]
+                            t = [0, 0, 10]
+                            focal = [1500, 1500]
                             princpt = [500, 500]
 
                             cam_param = {'R': R, 't': t, 'focal': focal, 'princpt': princpt}
@@ -173,11 +189,11 @@ class AMASS_CMU(torch.utils.data.Dataset):
         root_pose = smpl_pose[self.smpl_root_joint_idx, :].numpy()
         angle = np.linalg.norm(root_pose)
         root_pose = transforms3d.axangles.axangle2mat(root_pose / angle, angle)
+
         root_pose = np.dot(R, root_pose)
         axis, angle = transforms3d.axangles.mat2axangle(root_pose)
         root_pose = axis * angle
         smpl_pose[self.smpl_root_joint_idx] = torch.from_numpy(root_pose)
-
         smpl_pose = smpl_pose.view(1, -1)
 
         # get mesh and joint coordinates
@@ -193,6 +209,7 @@ class AMASS_CMU(torch.utils.data.Dataset):
         # meter -> milimeter
         smpl_mesh_coord *= 1000;
         smpl_joint_coord *= 1000;
+
         return smpl_mesh_coord, smpl_joint_coord
 
     def add_pelvis_and_neck(self, joint_coord):
@@ -237,6 +254,15 @@ class AMASS_CMU(torch.utils.data.Dataset):
         # regress coco joints
         joint_cam_h36m, joint_img_h36m = self.get_joints_from_mesh(mesh_cam, 'human36', cam_param)
         joint_cam_coco, joint_img_coco = self.get_joints_from_mesh(mesh_cam, 'coco', cam_param)
+        # debug vis
+        # vis_3d_pose(joint_cam_coco, self.coco_skeleton, joint_set_name='coco', prefix=f'coco_joint_cam_{idx}')
+        # img = np.zeros((int(img_shape[0]), int(img_shape[1]), 3))
+        # vis_2d_pose(joint_img_coco, img, self.coco_skeleton, prefix='coco joint img')
+
+        # root relative camera coordinate
+        mesh_cam = mesh_cam - joint_cam_h36m[:1]
+        joint_cam_coco = joint_cam_coco - joint_cam_coco[-2:-1]
+        joint_cam_h36m = joint_cam_h36m - joint_cam_h36m[:1]
 
         # joint_cam is PoseNet target
         if self.input_joint_name == 'coco':
@@ -245,16 +271,17 @@ class AMASS_CMU(torch.utils.data.Dataset):
             joint_img, joint_cam = joint_img_h36m, joint_cam_h36m
 
         # make new bbox
-        bbox = get_bbox(joint_img)
-        bbox = process_bbox(bbox.copy())
+        tight_bbox = get_bbox(joint_img)
+        bbox = process_bbox(tight_bbox.copy())
 
         # aug
         joint_img, trans = j2d_processing(joint_img.copy(), (cfg.MODEL.input_shape[1], cfg.MODEL.input_shape[0]),
-                                          bbox, rot, flip, self.flip_pairs)
-        joint_cam = j3d_processing(joint_cam, rot, flip, self.flip_pairs)
-
+                                          bbox, rot, 0, None)
         if not cfg.DATASET.use_gt_input:
-            joint_img = self.replace_joint_img(joint_img, bbox, trans)
+            joint_img = self.replace_joint_img(joint_img, tight_bbox, trans)
+        if flip:
+            joint_img = flip_2d_joint(joint_img, cfg.MODEL.input_shape[1], self.flip_pairs)
+        joint_cam = j3d_processing(joint_cam, rot, flip, self.flip_pairs)
 
         #  -> 0~1
         joint_img = joint_img[:, :2]
