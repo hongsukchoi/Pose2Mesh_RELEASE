@@ -10,7 +10,7 @@ __pycache__/
 
 # custom
 .idea/*
-*.png
+# *.png
 *.jpg
 *.out
 experiment/

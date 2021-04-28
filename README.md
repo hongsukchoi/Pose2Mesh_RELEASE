@@ -35,7 +35,7 @@ This repository is the offical [Pytorch](https://pytorch.org/) implementation of
 ## Results
 Here I report the performance of Pose2Mesh.
 
-:muscle: __Update:__ We increased the performance on 3DPW using GT meshes obtained from [NeuralAnnot](https://arxiv.org/abs/2011.11232) on COCO and AMASS.  
+:muscle: __Update:__ We increased the performance on 3DPW using GT meshes obtained from [NeuralAnnot](https://arxiv.org/abs/2011.11232) on COCO and AMASS. The annotations from NeuralAnnot are yet to be released.  
 :muscle: __Update:__ The performance on 3DPW has increased using [DarkPose](https://github.com/ilovepose/DarkPose) 2D detection, which improved [HRNet](https://github.com/leoxiaobin/deep-high-resolution-net.pytorch).
 
 ![table](./asset/tab.png)
