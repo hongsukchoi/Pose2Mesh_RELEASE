@@ -13,20 +13,20 @@ This repository is the offical [Pytorch](https://pytorch.org/) implementation of
 ![overall pipeline](./asset/pipeline.png)
 
 
-## Install guidelines
+## Install Guidelines
 - We recommend you to use an [Anaconda](https://www.anaconda.com/) virtual environment. Install [PyTorch](https://pytorch.org/) >= 1.2 according to your GPU driver and Python >= 3.7.2, and run `sh requirements.sh`. 
 
 
-## Quick demo
+## Quick Demo
 - Download the pre-trained Pose2Mesh according to [this](#pretrained-model-weights).
 - Prepare SMPL and MANO layers according to [this](#pytorch-smpl-and-mano-layer).
 - Prepare a pose input, for instance, as `input.npy`. `input.npy` should contain the coordinates of 2D human joints, which follow the topology of joint sets defined [here](#start). The joint orders can be found in each `${ROOT}/data/*/dataset.py`.
-### Demo on a single person
+### Demo on a Single Person
 - Run `python demo/run.py --gpu 0 --input_pose demo/h36m_joint_input.npy --joint_set human36`.
 - You can replace `demo/h36m_joint_input.npy` and `human36` with your input numpy file and one of `{human36,coco,smpl,mano}`.
 - Add `--input_img {img_path}` on the command if you want to a rendered mesh overlayed on an input image.
 - The outputs `demo_pose2d.png`, `demo_mesh.png`, and `demo_mesh_.obj` will be saved in `${ROOT}/demo/result/`.
-### Demo on multiple people
+### Demo on Multiple People
 - Download demo input from [here](https://drive.google.com/drive/folders/1Vk-R_9MdoRflclfN2iQVWjxlFAHHe4bG?usp=sharing) and place them under `${ROOT}/demo/`.
 - Run `python demo/run.py --gpu 0`.
 - Outputs on a sampled image from [CrowdPose datasest](https://github.com/MVIG-SJTU/AlphaPose/blob/pytorch/doc/CrowdPose.md) will be saved in `${ROOT}/demo/result/`.
@@ -132,15 +132,15 @@ ${ROOT}
 ```
 - Download Human3.6M parsed data and SMPL parameters [[data](https://drive.google.com/drive/folders/1kgVH-GugrLoc9XyvP6nRoaFpw3TmM5xK)][[SMPL parameters from SMPLify-X](https://drive.google.com/drive/folders/1s-yywb4zF_OOLMmw1rsYh_VZFilgSrrD)]
 - Download MuCo parsed/composited data and SMPL parameters [[data](https://drive.google.com/drive/folders/1yL2ey3aWHJnh8f_nhWP--IyC9krAPsQN)][[SMPL parameters from SMPLify-X](https://drive.google.com/drive/folders/1_JrrbHZICDTe1lqi8S6D_Y1ObmrerAoU?usp=sharing)]
-- Download COCO SMPL parameters [[SMPL parameters from SMPLify](https://drive.google.com/drive/folders/1X7OMEGQJOe0Tcn2GvvP1koKkq4yghIzr?usp=sharing)]  
+- Download COCO SMPL parameters [[SMPL parameters from SMPLify](https://drive.google.com/drive/folders/1hJabUWLOMboM2sUhIj0ep6wiRsO3Kh4C?usp=sharing)]  
 - Download AMASS SMPL parameters [[offical site](https://amass.is.tue.mpg.de/)]
-- Download SURREAL parsed data [[data](https://drive.google.com/drive/folders/1vvJXM0WYzbkjTTVAFsfXRAdyAwAhEPPh?usp=sharing)] 
-- Download 3DPW parsed data [[data](https://drive.google.com/drive/folders/1pT0Ix3FxieEQf0HhEbMN1o-DWRzw2Ugh?usp=sharing)]
-- Download FreiHAND parsed data [[data](https://drive.google.com/drive/folders/1syj8KEGxHV6lXGOStJGJ6qGaIol-4xD7?usp=sharing)] (`bbox` in `freihand_eval_coco.json` is from [Detectron2](https://github.com/facebookresearch/detectron2))
+- Download SURREAL parsed data [[data](https://drive.google.com/drive/folders/19zb70WOc-5aJ1p_bHP_04milMYpO83P_?usp=sharing)] 
+- Download 3DPW parsed data [[data](https://drive.google.com/drive/folders/1_wi6G6h-JFfb9HGccysJwI02zc_S2DVJ?usp=sharing)]
+- Download FreiHAND parsed data [[data](https://drive.google.com/drive/folders/1pDix5i-nv0A3Hq98AR1jZrufByAZHHFP?usp=sharing)] (`bbox` in `freihand_eval_coco.json` is from [Detectron2](https://github.com/facebookresearch/detectron2))
 - All annotation files follow [MS COCO format](https://cocodataset.org/#format-data).
 - If you want to add your own dataset, you have to convert it to [MS COCO format](https://cocodataset.org/#format-data).
 - Images need to to be downloaded, but if needed you can download them from their offical sites.
-- 2D pose detection outputs can be downloaded here: [Human36M](https://drive.google.com/drive/folders/1iRuNa6CqoHbloJ-wFPpW6g72QmP9xZT-?usp=sharing), [COCO](https://drive.google.com/drive/folders/1x0lLocLWloN813njSTsP0K09opTcLULE?usp=sharing), [3DPW](https://drive.google.com/drive/folders/1qt5R4wMTP1FSUtSi52lUke3EQazNkqVh?usp=sharing), [SURREAL](https://drive.google.com/drive/folders/1dkHOZwaflluUCPZpbLwio9s3kN1QwHz8?usp=sharing), [FreiHAND](https://drive.google.com/drive/folders/1QfAoCNTuQKbFTIoS5p9Hm_4IRdM5xVif?usp=sharing)
+- 2D pose detection outputs can be downloaded here: [Human36M](https://drive.google.com/drive/folders/1YjACLyfm7V-cUIXr1b8SWJzmKtuhpOCp?usp=sharing), [COCO](https://drive.google.com/drive/folders/19HyI1ENxF0fKV5xXKqXTRLcc-QJJazMP?usp=sharing), [3DPW](https://drive.google.com/drive/folders/1fgliGqMgQwy6zAoUEZHayq4IySNlyqib?usp=sharing), [SURREAL](https://drive.google.com/drive/folders/1ePJQnyZlRk78n4Szt_M-CLJ27w7C9H-G?usp=sharing), [FreiHAND](https://drive.google.com/drive/folders/1YwTzECET2N9D-ESnShGBMbb6rqWT5dkK?usp=sharing)
 
 If you have a problem with 'download limit' when trying to download datasets from google drive links, please try this trick.
 >* Go the shared folder, which contains files you want to copy to your drive  
@@ -153,7 +153,7 @@ If you have a problem with 'download limit' when trying to download datasets fro
 - For the SMPL layer, I used [smplpytorch](https://github.com/gulvarol/smplpytorch). The repo is already included in `${ROOT}/smplpytorch`.
 - Download `basicModel_f_lbs_10_207_0_v1.0.0.pkl`, `basicModel_m_lbs_10_207_0_v1.0.0.pkl`, and `basicModel_neutral_lbs_10_207_0_v1.0.0.pkl` from [here](https://smpl.is.tue.mpg.de/download.php) (female & male) and [here](http://smplify.is.tue.mpg.de/) (neutral) to `${ROOT}/smplpytorch/smplpytorch/native/models`.
 For the MANO layer, I used [manopth](https://github.com/hassony2/manopth). The repo is already included in `${ROOT}/manopth`.
-Download `MANO_RIGHT.pkl` from [here](https://mano.is.tue.mpg.de/downloads) at `${ROOT}/manopth/mano/models`.
+Download `MANO_RIGHT.pkl` from [here](https://mano.is.tue.mpg.de) at `${ROOT}/manopth/mano/models`.
 
 ### Experiment
 
@@ -181,7 +181,7 @@ Default timezone is UTC+9, but you can set to your local time.
 - `vis` contains `*.obj` files of meshes and images with 2D human poses or human meshes. 
 
 ### Pretrained model weights
-Download pretrained model weights from [here](https://drive.google.com/drive/folders/1HayITLQYf6d43ksShRYF3CU6KDKd84Kn?usp=sharing) to a corresponding directory.
+Download pretrained model weights from [here](https://drive.google.com/drive/folders/1TbKc8tLq1hLcTS_-F1OjkJZYIZbJ6XUh?usp=sharing) to a corresponding directory.
 ```
 ${ROOT}  
 |-- experiment  
@@ -250,3 +250,12 @@ booktitle = {European Conference on Computer Vision (ECCV)},
 year = {2020}  
 }  
 ```
+
+### Related Projects
+
+[I2L-MeshNet_RELEASE](https://github.com/mks0601/I2L-MeshNet_RELEASE)  
+[3DCrowdNet_RELEASE](https://github.com/hongsukchoi/3DCrowdNet_RELEASE)  
+[TCMR_RELEASE](https://github.com/hongsukchoi/TCMR_RELEASE)  
+[Hand4Whole_RELEASE](https://github.com/mks0601/Hand4Whole_RELEASE)  
+[HandOccNet](https://github.com/namepllet/HandOccNet)  
+[NeuralAnnot_RELEASE](https://github.com/mks0601/NeuralAnnot_RELEASE)
