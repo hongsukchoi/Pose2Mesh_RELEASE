@@ -130,8 +130,8 @@ ${ROOT}
 |   |   |   |-- hrnet_output_on_testset.json
 |   |   |   |-- simple_output_on_testset.json
 ```
-- Download Human3.6M parsed data and SMPL parameters [[data](https://drive.google.com/drive/folders/1kgVH-GugrLoc9XyvP6nRoaFpw3TmM5xK)][[SMPL parameters from SMPLify-X](https://drive.google.com/drive/folders/1s-yywb4zF_OOLMmw1rsYh_VZFilgSrrD)]
-- Download MuCo parsed/composited data and SMPL parameters [[data](https://drive.google.com/drive/folders/1yL2ey3aWHJnh8f_nhWP--IyC9krAPsQN)][[SMPL parameters from SMPLify-X](https://drive.google.com/drive/folders/1_JrrbHZICDTe1lqi8S6D_Y1ObmrerAoU?usp=sharing)]
+- Download Human3.6M parsed data and SMPL parameters [[data](https://drive.google.com/drive/folders/1r0B9I3XxIIW_jsXjYinDpL6NFcxTZart?usp=share_link)][[SMPL parameters from SMPLify-X](https://drive.google.com/drive/folders/12fCumEgs9PXT-dAaOGq0EDpl9dGKKorF?usp=share_link)]
+- Download MuCo parsed/composited data and SMPL parameters [[data](https://drive.google.com/drive/folders/1dfhFa1kBHYKLTKuprNc7xixt3yyKEky5?usp=share_link)][[SMPL parameters from SMPLify-X](https://drive.google.com/drive/folders/1Wm1_6tn1u-_RE1iUlibIWfS75O79aJRz?usp=share_link)] 
 - Download COCO SMPL parameters [[SMPL parameters from SMPLify](https://drive.google.com/drive/folders/1hJabUWLOMboM2sUhIj0ep6wiRsO3Kh4C?usp=sharing)]  
 - Download AMASS SMPL parameters [[offical site](https://amass.is.tue.mpg.de/)]
 - Download SURREAL parsed data [[data](https://drive.google.com/drive/folders/19zb70WOc-5aJ1p_bHP_04milMYpO83P_?usp=sharing)] 
