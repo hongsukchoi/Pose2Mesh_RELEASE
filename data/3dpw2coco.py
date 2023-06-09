@@ -68,7 +68,7 @@ def vis_mesh(img, mesh_vertex, alpha=0.5):
     return cv2.addWeighted(img, 1.0 - alpha, mask, alpha, 0)
 
 import sys
-smpl_path = '/home/redarknight/projects/Pose2Mesh/smplpytorch'
+smpl_path = '/home/hongsuk.c/Projects/Pose2Mesh_RELEASE/smplpytorch'
 sys.path.insert(0, smpl_path)
 from smplpytorch.pytorch.smpl_layer import SMPL_Layer
 
@@ -78,14 +78,21 @@ smpl_layer = SMPL_Layer(
     gender='neutral',
     model_root=smpl_path + '/smplpytorch/native/models')
 
-root_path = '/media/disk2/hongsuk/data/3DPW/'
+root_path = '/labdata/datasets/3dpw'
 img_id = 0; annot_id = 0;
 
 set_list = ['train']  # ['train', 'validation', 'test']
+pkl_list_dict = {
+    'test': ['downtown_runForBus_01.pkl', 'downtown_walkBridge_01.pkl', 'flat_guitar_01.pkl', 'downtown_walkUphill_00.pkl', 'downtown_upstairs_00.pkl', 'office_phoneCall_00.pkl', 'downtown_rampAndStairs_00.pkl', 'downtown_runForBus_00.pkl', 'downtown_downstairs_00.pkl', 'downtown_bar_00.pkl', 'downtown_arguing_00.pkl', 'downtown_crossStreets_00.pkl', 'downtown_weeklyMarket_00.pkl', 'downtown_car_00.pkl', 'downtown_warmWelcome_00.pkl', 'downtown_sitOnStairs_00.pkl', 'outdoors_fencing_01.pkl', 'downtown_walking_00.pkl', 'flat_packBags_00.pkl', 'downtown_cafe_00.pkl', 'downtown_stairs_00.pkl', 'downtown_windowShopping_00.pkl', 'downtown_enterShop_00.pkl', 'downtown_bus_00.pkl']
+    , 'validation': ['courtyard_hug_00.pkl', 'outdoors_freestyle_01.pkl', 'courtyard_drinking_00.pkl', 'outdoors_parcours_00.pkl', 'courtyard_rangeOfMotions_01.pkl', 'outdoors_parcours_01.pkl', 'outdoors_crosscountry_00.pkl', 'courtyard_dancing_00.pkl', 'courtyard_basketball_01.pkl', 'outdoors_golf_00.pkl', 'courtyard_jumpBench_01.pkl', 'downtown_walkDownhill_00.pkl']
+    , 'train': ['courtyard_rangeOfMotions_00.pkl', 'courtyard_dancing_01.pkl', 'courtyard_warmWelcome_00.pkl', 'outdoors_slalom_00.pkl', 'outdoors_climbing_00.pkl', 'courtyard_box_00.pkl', 'courtyard_shakeHands_00.pkl', 'courtyard_backpack_00.pkl', 'courtyard_capoeira_00.pkl', 'courtyard_giveDirections_00.pkl', 'outdoors_climbing_02.pkl', 'courtyard_captureSelfies_00.pkl', 'courtyard_bodyScannerMotions_00.pkl', 'courtyard_golf_00.pkl', 'courtyard_relaxOnBench_00.pkl', 'courtyard_basketball_00.pkl', 'courtyard_laceShoe_00.pkl', 'courtyard_goodNews_00.pkl', 'courtyard_jacket_00.pkl', 'courtyard_relaxOnBench_01.pkl', 'outdoors_climbing_01.pkl', 'outdoors_slalom_01.pkl', 'outdoors_freestyle_00.pkl', 'courtyard_arguing_00.pkl']
+
+}
 for data_split in tqdm(set_list):
 
     images = []; annotations = [];
-    annot_list = glob(osp.join(root_path, 'sequenceFiles', data_split, '*.pkl'))
+    pkl_list = pkl_list_dict[data_split] #glob(osp.join(root_path, 'sequenceFiles', data_split, '*.pkl'))
+    annot_list = [osp.join(root_path, 'sequenceFiles', data_split, pkl_file) for pkl_file in pkl_list]
     for annot in tqdm(annot_list):
         with open(annot, 'rb') as f:
             data = pickle.load(f, encoding='latin1')
@@ -116,7 +123,7 @@ for data_split in tqdm(set_list):
             img_dict['frame_idx'] = int(iid)
             img_dict['width'] = img_width
             img_dict['height'] = img_height
-            img_dict['cam_param'] = {'focal': focal, 'princpt': princpt}
+            img_dict['cam_param'] = {'focal': focal, 'princpt': princpt, 'R': Rs[iid].tolist(), 't': ts[iid].tolist()}
             images.append(img_dict)
 
             for pid in range(person_num):
@@ -217,7 +224,7 @@ for data_split in tqdm(set_list):
             img_id += 1
     
     output = {'images': images, 'annotations': annotations}
-    output_path = osp.join(root_path, '3DPW_latest_' + data_split + '.json')
+    output_path = '3DPW_latest_' + data_split + '.json'
     with open(output_path, 'w') as f:
         json.dump(output, f)
     print('Saved at ' + output_path)
