@@ -27,7 +27,7 @@ This repository is the offical [Pytorch](https://pytorch.org/) implementation of
 - Add `--input_img {img_path}` on the command if you want to a rendered mesh overlayed on an input image.
 - The outputs `demo_pose2d.png`, `demo_mesh.png`, and `demo_mesh_.obj` will be saved in `${ROOT}/demo/result/`.
 ### Demo on Multiple People
-- Download demo input from [here](https://drive.google.com/drive/folders/1Vk-R_9MdoRflclfN2iQVWjxlFAHHe4bG?usp=sharing) and place them under `${ROOT}/demo/`.
+- Download demo input from [here](https://drive.google.com/drive/folders/1RO7B_P4Y8Wg9AAvz08-6_iR7Vssjv4dG?usp=drive_link) and place them under `${ROOT}/demo/`.
 - Run `python demo/run.py --gpu 0`.
 - Outputs on a sampled image from [CrowdPose datasest](https://github.com/MVIG-SJTU/AlphaPose/blob/pytorch/doc/CrowdPose.md) will be saved in `${ROOT}/demo/result/`.
 - You can change an input image and some details in lines 264~278 of `${ROOT}/demo/run.py`.
